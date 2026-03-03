@@ -14,8 +14,8 @@
 /* basic settings ************************************************************/
 
 // The array contains physical node IDs and their position in the array is the logical node ID.
-// static const uint8_t nodes[]	= { 1, 2 };
-static const uint8_t nodes[] = { 1, 2};
+// static const uint8_t nodes[]	= { 1, 2, 3 };
+static const uint8_t nodes[] = { 1, 2, 3};
 
 #define MX_NUM_NODES			NUM_ELEMENTS(nodes)
 #define MX_INITIATOR_ID			1
@@ -25,11 +25,11 @@ static const uint8_t nodes[] = { 1, 2};
 
 #if DEFAULT_MODE == 0
 	// Entries in the plants array send probability values.
-	static const uint8_t plants[] = {1, 2};
+	static const uint8_t plants[] = {1, 2, 3};
 
 	#define MX_ROUND_LENGTH				190 // in #slots
 	#define ROUND_PERIOD				GPI_TICK_MS_TO_HYBRID2(100)
-	#define AGGREGATE_SIZE				5
+	#define AGGREGATE_SIZE				6
 	#define MX_SLOT_LENGTH				GPI_TICK_US_TO_HYBRID2(400)
 #endif
 

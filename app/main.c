@@ -106,11 +106,13 @@ GPI_TRACE_CONFIG(main, GPI_TRACE_BASE_SELECTION);
 #define PRINT_HEADER()	printf("# ID:%u ", TOS_NODE_ID)
 
 // Function to access aggregate field.
-//  |00000000   00000000   0000|0000 | 0000|0000   0|00000|00
-//  |          flags           | p1  |  p2 |   n1   |  n2 |
+//  |00000000   00000000|0000 | 0000|0000 |0000|0000 | 0000|0000|0000
+//  |  flags (16 bits)  | p1  |  p2 |     | p3 |  n1 |  n2 |    | n3
 // ATTENTION: Macros assume agg to be a pointer to uint8_t.
-// ATTENTION: This is a fixed 2 nodes setting!
-#define CONTROL_MSG_LIMIT				1
+// ATTENTION: Supports 3 nodes configuration (MX_NUM_NODES = 3)
+// Number of scheduled data packets to treat as "control"/scheduled.
+// Use MX_NUM_NODES so this adapts when node count changes.
+#define CONTROL_MSG_LIMIT				(MX_NUM_NODES)
 //#define SET_AGG_FLAG_NODE(agg, node)	( agg[(node - 1) / 8] |= (0x1 << (7 - ((node - 1) % 8))) )
 static inline void SET_AGG_FLAG_NODE(uint8_t *agg, uint8_t node) {
 	uint8_t byte = (node - 1) / 8;
@@ -119,17 +121,16 @@ static inline void SET_AGG_FLAG_NODE(uint8_t *agg, uint8_t node) {
 }
 #define SET_PRIO1(agg, p) 				( agg[2] = (agg[2] & 0xF0) | (p & 0x0F) )
 #define GET_PRIO1(agg) 					( agg[2] & 0x0F )
-#define SET_PRIO2(agg, p)				( agg[3] = ((p & 0x0F) << 4) | (agg[3] & 0x0F) )
-#define GET_PRIO2(agg)					( (agg[3] & 0xF0) >> 4 )
-#define SET_NODE1(agg, n)                           \
-   do                                               \
-   {                                                \
-	 agg[3] = (agg[3] & 0xF0) | ((n >> 1) & 0x0F);  \
-	 agg[4] = ((n & 0x1) << 7) | (agg[4] & 0x7C);   \
-   } while(0)
-#define GET_NODE1(agg)					( ((agg[3] & 0x0F) << 1) | ((agg[4] & 0x80) >> 7) )
-#define SET_NODE2(agg, n)				( agg[4] = (agg[4] & 0x80) | ((n << 2) & 0x7C) )
-#define GET_NODE2(agg)					( (agg[4] & 0x7C) >> 2 )
+#define SET_PRIO2(agg, p)				( agg[2] = (agg[2] & 0x0F) | ((p & 0x0F) << 4) )
+#define GET_PRIO2(agg)					( (agg[2] & 0xF0) >> 4 )
+#define SET_PRIO3(agg, p)				( agg[3] = (agg[3] & 0xF0) | (p & 0x0F) )
+#define GET_PRIO3(agg)					( agg[3] & 0x0F )
+#define SET_NODE1(agg, n)				( agg[4] = (agg[4] & 0xF0) | (n & 0x0F) )
+#define GET_NODE1(agg)					( agg[4] & 0x0F )
+#define SET_NODE2(agg, n)				( agg[4] = (agg[4] & 0x0F) | ((n & 0x0F) << 4) )
+#define GET_NODE2(agg)					( (agg[4] & 0xF0) >> 4 )
+#define SET_NODE3(agg, n)				( agg[5] = (agg[5] & 0xF0) | (n & 0x0F) )
+#define GET_NODE3(agg)					( agg[5] & 0x0F )
 
 
 //**************************************************************************************************
@@ -183,8 +184,7 @@ uint16_t __attribute__((section(".data")))	TOS_NODE_ID = 0;
 //**************************************************************************************************
 //***** Local Functions ****************************************************************************
 
-// ATTENTION: This is a fixed 2 nodes setting!
-
+// Supports 3 nodes configuration (MX_NUM_NODES = 3)
 unsigned int all_flags_set(uint8_t *agg)
 {
 	for (int i = 0; i < MX_NUM_NODES; ++i)
@@ -199,8 +199,7 @@ unsigned int all_flags_set(uint8_t *agg)
 
 //**************************************************************************************************
 
-// ATTENTION: This is a fixed 2 nodes setting!
-
+// Supports 3 nodes configuration (MX_NUM_NODES = 3)
 static void merge_all_flags(uint8_t *dst, const uint8_t *src)
 {
     // Merge flags for actual number of nodes (each bit represents a node)
@@ -214,7 +213,7 @@ static void merge_all_flags(uint8_t *dst, const uint8_t *src)
     if (num_flag_bytes > 2) {
         dst[2] |= (src[2] & 0xF0);
     } else if (num_flag_bytes == 2) {
-        // dst[2] exists, but we don’t want to touch lower 4 bits (priority bits)
+        // dst[2] exists, but we donï¿½t want to touch lower 4 bits (priority bits)
         dst[2] = (dst[2] & 0x0F) | (src[2] & 0xF0);
     }
 }
@@ -231,19 +230,21 @@ static void agg_rx_cb(volatile uint8_t *agg_is_valid, uint8_t *agg_local, uint8_
 
 	pn local1	= { GET_PRIO1(agg_local), GET_NODE1(agg_local) };
 	pn local2	= { GET_PRIO2(agg_local), GET_NODE2(agg_local) };
+	pn local3	= { GET_PRIO3(agg_local), GET_NODE3(agg_local) };
 	pn rx1		= { GET_PRIO1(agg_rx), GET_NODE1(agg_rx) };
 	pn rx2		= { GET_PRIO2(agg_rx), GET_NODE2(agg_rx) };
+	pn rx3		= { GET_PRIO3(agg_rx), GET_NODE3(agg_rx) };
 
-	pn array[4] = {local1, local2, rx1, rx2};
+	pn array[6] = {local1, local2, local3, rx1, rx2, rx3};
 
 	// Sort elements with respect to their priorities and node IDs.
 	uint8_t i, j;
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < 6; i++)
 	{
 		pn cur_element = array[i];
 		uint8_t new_element_idx = i;
 
-		for (j = i + 1; j < 4; j++)
+		for (j = i + 1; j < 6; j++)
 		{
 			// avoid duplicates
 			if (array[j].node == array[new_element_idx].node)
@@ -280,6 +281,8 @@ static void agg_rx_cb(volatile uint8_t *agg_is_valid, uint8_t *agg_local, uint8_
 	SET_NODE1(agg_local, array[0].node);
 	SET_PRIO2(agg_local, array[1].prio);
 	SET_NODE2(agg_local, array[1].node);
+	SET_PRIO3(agg_local, array[2].prio);
+	SET_NODE3(agg_local, array[2].node);
 
 	// activate aggregate after modification
 	*agg_is_valid = 1;
@@ -336,7 +339,7 @@ static void print_results(uint8_t log_id)
 		   msgs_not_decoded, msgs_weak, msgs_weak_fake);
 
 	PRINT_HEADER();
-	printf("aggregate: %02" PRIx8 " %02" PRIx8 " %02" PRIx8 " (n1=%" PRIu8 " p1=%" PRIu8 " n2=%" PRIu8 " p2=%" PRIu8 ")\n", agg[0], agg[1], agg[2] & 0xF0, GET_NODE1(agg), GET_PRIO1(agg), GET_NODE2(agg), GET_PRIO2(agg));
+	printf("aggregate: %02" PRIx8 " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 " (n1=%" PRIu8 " p1=%" PRIu8 " n2=%" PRIu8 " p2=%" PRIu8 " n3=%" PRIu8 " p3=%" PRIu8 ")\n", agg[0], agg[1], agg[2], agg[3], agg[4], agg[5], GET_NODE1(agg), GET_PRIO1(agg), GET_NODE2(agg), GET_PRIO2(agg), GET_NODE3(agg), GET_PRIO3(agg));
 
 	// PRINT_HEADER();
 	// printf("agg flags = %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n", agg[0], agg[1], agg[2] & 0xF0);
@@ -735,6 +738,10 @@ int main()
 			{
 				send_idx = 2;
 			}
+			else if (TOS_NODE_ID == GET_NODE3(agg))
+			{
+				send_idx = 3;
+			}
 			#if PLANT_STATE_LOGGING
 				else
 				{
@@ -742,6 +749,8 @@ int main()
 					if (TOS_NODE_ID < GET_NODE1(agg))
 						send_idx++;
 					if (TOS_NODE_ID < GET_NODE2(agg))
+						send_idx++;
+					if (TOS_NODE_ID < GET_NODE3(agg))
 						send_idx++;
 				}
 			#endif
