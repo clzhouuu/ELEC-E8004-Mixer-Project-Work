@@ -1,8 +1,8 @@
-#include <../include/inc/msp432p401r.h>
-#include <../include/bolt.h>
-#include <../include/board_config.h>
-#include <../include/driverlib/MSP432P4xx/gpio.h>
-#include <../include/driverlib/MSP432P4xx/spi.h>
+#include <msp432p401r.h>
+#include <bolt.h>
+#include <board_config.h>
+#include <MSP432P4xx/gpio.h>
+#include <MSP432P4xx/spi.h>
 
 
 // set high or low
@@ -19,7 +19,6 @@ static void pin_set(uint_fast8_t port, uint_fast16_t pin, uint8_t value) {
 static uint8_t pin_read(uint_fast8_t port, uint_fast16_t pin) {
     return GPIO_getInputPinValue(port, pin);
 }
-
 
 // BOLT inialization
 uint8_t bolt_init(void) {

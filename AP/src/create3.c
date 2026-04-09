@@ -1,10 +1,10 @@
 #include <string.h>
 #include <stdint.h>
-#include <../inc/msp432p401r.h>
-#include "../include/driverlib/MSP432P4xx/gpio.h"
-#include "../include/driverlib/MSP432P4xx/uart.h"
-#include "../include/board_config.h"
-#include "../include/create3.h"
+#include <msp432p401r.h>
+#include "MSP432P4xx/gpio.h"
+#include "MSP432P4xx/uart.h"
+#include "board_config.h"
+#include "create3.h"
 
 // local varibales
 static RobotPoseMsg_t g_latest_pose;

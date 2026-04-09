@@ -1,8 +1,8 @@
 #include <msp432p401r.h>
 #include <string.h>
-#include "../include/bolt.h"
-#include "../include/message.h"
-#include "../include/create3.h"
+#include "bolt.h"
+#include "message.h"
+#include "create3.h"
 
 
 // CHANGE THIS FOR EACH ROBOT
