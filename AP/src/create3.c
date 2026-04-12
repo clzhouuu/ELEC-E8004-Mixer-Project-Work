@@ -6,6 +6,8 @@
 #include "board_config.h"
 #include "create3.h"
 
+// this needs to be changed for Raspberry Pi
+
 // local varibales
 static RobotPoseMsg_t g_latest_pose;
 static uint8_t g_robot_id = 0;

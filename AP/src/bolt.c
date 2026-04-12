@@ -72,7 +72,7 @@ uint8_t bolt_data_available(void) {
 }
 
 // APP to CP write 
-static uint8_t bolt_write(uint8_t* data, uint8_t len) {
+uint8_t bolt_write(uint8_t* data, uint16_t len) {
 
     // MODE HIGH
     pin_set(BOLT_MODE_PORT, BOLT_MODE_PIN, 1);
@@ -92,7 +92,18 @@ static uint8_t bolt_write(uint8_t* data, uint8_t len) {
         }
     }
 
-    // send bytes over SPI
+    // send length as two bytes
+    while (!EUSCI_B_SPI_getInterruptStatus(
+        EUSCI_B0_BASE,
+        EUSCI_B_SPI_TRANSMIT_INTERRUPT));
+    EUSCI_B_SPI_transmitData(EUSCI_B0_BASE, len & 0xFF);
+
+    while (!EUSCI_B_SPI_getInterruptStatus(
+        EUSCI_B0_BASE,
+        EUSCI_B_SPI_TRANSMIT_INTERRUPT));
+    EUSCI_B_SPI_transmitData(EUSCI_B0_BASE, (len >> 8) & 0xFF);
+
+    // send data over SPI
     uint8_t i;
     for (i = 0; i < len; i++) {
         while (!EUSCI_B_SPI_getInterruptStatus(
@@ -111,7 +122,8 @@ static uint8_t bolt_write(uint8_t* data, uint8_t len) {
 }
 
 // BOLT READ reading from CP to APP
-static uint8_t bolt_read(uint8_t* buf, uint8_t* len) {
+uint8_t bolt_read(uint8_t* buf, uint8_t* len) {
+    uint8_t temp[2 + 3 + BOLT_MAX_PAYLOAD + 1];
 
     // MODE LOW, read
     pin_set(BOLT_MODE_PORT, BOLT_MODE_PIN, 0);
@@ -131,94 +143,50 @@ static uint8_t bolt_read(uint8_t* buf, uint8_t* len) {
     }
 
     // receive bytes until ACK drops LOW
-    *len = 0;
+    uint8_t raw_len = 0;
     while (pin_read(BOLT_ACK_PORT, BOLT_ACK_PIN) == 1) {
+        // check that bytes dont exceed buffer size
+        if (raw_len >= sizeof(temp)) {
+            pin_set(BOLT_REQ_PORT, BOLT_REQ_PIN, 0);
+            return 0;
+        }
+
         // send dummy byte to clock in data
+        while (!EUSCI_B_SPI_getInterruptStatus(
+            EUSCI_B0_BASE,
+            EUSCI_B_SPI_TRANSMIT_INTERRUPT));
         EUSCI_B_SPI_transmitData(EUSCI_B0_BASE, 0x00);
+
+        // read bytes
         while (!EUSCI_B_SPI_getInterruptStatus(
             EUSCI_B0_BASE,
             EUSCI_B_SPI_RECEIVE_INTERRUPT));
-        buf[*len] = EUSCI_B_SPI_receiveData(EUSCI_B0_BASE);
-        (*len)++;
+        temp[raw_len] = EUSCI_B_SPI_receiveData(EUSCI_B0_BASE);
+        raw_len++;
     }
 
     // set REQ LOW
     pin_set(BOLT_REQ_PORT, BOLT_REQ_PIN, 0);
 
-    return 1; 
-}
-
-
-// send a framed message
-uint8_t bolt_send(uint8_t channel, const void* payload, uint8_t length) {
-    if (length == 0 || length > BOLT_MAX_PAYLOAD) {
+    // check length and structure of received data
+    if (raw_len < 2) {
         return 0;
     }
 
-    // frame structure
-    uint8_t frame[3 + BOLT_MAX_PAYLOAD + 1];
-    uint8_t i;
+    uint16_t msg_len = ((uint16_t)temp[1] << 8) | temp[0];
 
-    frame[0] = BOLT_MAGIC;
-    frame[1] = channel;
-    frame[2] = length;
-
-    // payload conversion
-    const uint8_t* p = (const uint8_t*)payload;
-
-    //
-    uint8_t checksum = channel ^ length;
-
-    // copy payload and compute checksum
-    for (i = 0; i < length; i++) {
-        frame[3 + i] = p[i];
-        checksum ^= p[i];
-    }
-    frame[3 + length] = checksum;
-
-    return bolt_write(frame, 3 + length + 1);
-}
-
-// receive one framed message
-uint8_t bolt_recv(uint8_t* channel_out, uint8_t* buf, uint8_t* len_out) {
-
-    uint8_t raw[3 + BOLT_MAX_PAYLOAD + 1];
-    uint8_t raw_len = 0;
-    uint8_t i;
-
-    // error if no data or too short or bad magic byte
-    if (!bolt_read(raw, &raw_len) || raw_len < 4 || raw[0] != BOLT_MAGIC ) {
-        return 0;
-    }
-    
-    uint8_t channel = raw[1];
-    uint8_t length = raw[2];
-
-    if (length > BOLT_MAX_PAYLOAD) {
+    if (msg_len > (3 + BOLT_MAX_PAYLOAD + 1)) {
         return 0;
     }
 
-    if (raw_len < (uint8_t)(3 + length + 1)) {
+    if (raw_len != (uint8_t)(2 + msg_len)) {
         return 0;
     }
 
-    // validate checksum
-    uint8_t frame = channel ^ length;
-    for (i = 0; i < length; i++) {
-        frame ^= raw[3 + i];
+    for (uint8_t i = 0; i < msg_len; i++) {
+        buf[i] = temp[2 + i];
     }
 
-    if (raw[3 + length] != frame) {
-        return 0;
-    }
-
-    // copy out
-    *channel_out = channel;
-    *len_out = length;
-
-    for (i = 0; i < length; i++) {
-        buf[i] = raw[3 + i];
-    }
-
+    *len = (uint8_t)msg_len;
     return 1;
 }

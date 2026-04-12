@@ -1,8 +1,8 @@
 #include <msp432p401r.h>
 #include <string.h>
-#include "bolt.h"
-#include "message.h"
-#include "create3.h"
+#include "../include/bolt.h"
+#include "../include/message.h"
+#include "../include/create3.h"
 
 
 // CHANGE THIS FOR EACH ROBOT
@@ -50,12 +50,12 @@ static int32_t isqrt(int32_t n) {
     return x;
 }
 
-// distance calculateion
+// distance calculation
 static int32_t distance(RobotPoseMsg_t* a, RobotPoseMsg_t* b) {
     int32_t dx = a->x_fp - b->x_fp;
     int32_t dy = a->y_fp - b->y_fp;
     int64_t sumsq = (int64_t)dx * dx + (int64_t)dy * dy;
-    return isqrt((int32_t)(sumsq >> 32));
+    return isqrt((int32_t)(sumsq >> 16));
 }
 
 // scan for new BOLT msgs
@@ -64,29 +64,25 @@ static void receive_from_bolt(void) {
         return;
     }
 
-    uint8_t channel;
     uint8_t buf[BOLT_MAX_PAYLOAD];
     uint8_t len;
 
-    if (!bolt_recv(&channel, buf, &len)) {
+    if (!bolt_recv(buf, &len)) {
         return;
     }
 
-    if ((channel == CH_CP_PEER_ROBOT1 || 
-        channel == CH_CP_PEER_ROBOT2) && 
-        len == sizeof(RobotPoseMsg_t)) {
+    if (len == sizeof(RobotPoseMsg_t)) {
         RobotPoseMsg_t incoming;
         memcpy(&incoming, buf, sizeof(incoming));
-
-        if (incoming.robot_id < NUM_ROBOTS
-            && incoming.robot_id != OWN_ROBOT_ID) {
+        if (incoming.robot_id < NUM_ROBOTS && 
+            incoming.robot_id != OWN_ROBOT_ID) {
             g_poses[incoming.robot_id] = incoming;
         }
 
     }
 }
 
-// build and send pose to CP
+// build and send own pose to CP
 static void send_own_pose(uint32_t now_ms) {
     RobotPoseMsg_t pose;
     (void)now_ms;
@@ -96,10 +92,10 @@ static void send_own_pose(uint32_t now_ms) {
     }
 
     g_poses[OWN_ROBOT_ID] = pose;
-    bolt_send(CH_AP_OWN_POSE, &pose, sizeof(pose));
+    bolt_write((uint8_t*)&pose, sizeof(pose));
 }
 
-// calculate correction and send to CP
+/* calculate correction and send to CP
 static void send_correction(uint32_t now_ms) {
     VelCorrectionMsg_t correction;
     correction.timestamp_ms = now_ms;
@@ -134,6 +130,7 @@ static void send_correction(uint32_t now_ms) {
 
     bolt_send(CH_AP_VEL_CORRECTION, &correction, sizeof(correction));
 }
+*/
 
 // mark as stale data if no update for a while
 static void update_stale_flags(uint32_t now_ms) {
@@ -173,13 +170,13 @@ int main(void) {
 
         // check for updates
         receive_from_bolt();
-
-        // every X ms (20 Hz) send pose and correction
+        /* every X ms (20 Hz) send pose and correction
         if ((now - last_control_ms) >= CONTROL_PERIOD_MS) {
             last_control_ms = now;
             update_stale_flags(now);
             send_own_pose(now);
             send_correction(now);
         }
+        */
     }
 }

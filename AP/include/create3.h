@@ -9,13 +9,13 @@
 #define CREATE3_MSG_ODOM 0x01u
 #define CREATE3_MAX_PAYLOAD 64u
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     float x;
     float y;
     float theta;
     float v;
     float w;
-} Create3Payload_t;
+} __attribute__((packed)) Create3Payload_t;
 
 void create3_init(uint8_t robot_id);
 void create3_poll(uint32_t now_ms);
