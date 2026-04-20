@@ -1,0 +1,375 @@
+   1              	# 1 "/home/clzhou/Project work/ELEC-E8004-Mixer-Project-Work/app/nRF/Source/ses_nrf52840_Vectors.s"
+   2              	# 1 "<built-in>"
+   3              	# 1 "<command-line>"
+   4              	# 1 "/home/clzhou/Project work/ELEC-E8004-Mixer-Project-Work/app/nRF/Source/ses_nrf52840_Vectors.s"
+   5              	/*****************************************************************************
+   6              	 *                   SEGGER Microcontroller GmbH & Co. KG                    *
+   7              	 *            Solutions for real time microcontroller applications           *
+   8              	 *****************************************************************************
+   9              	 *                                                                           *
+  10              	 *               (c) 2017 SEGGER Microcontroller GmbH & Co. KG               *
+  11              	 *                                                                           *
+  12              	 *           Internet: www.segger.com   Support: support@segger.com          *
+  13              	 *                                                                           *
+  14              	 *****************************************************************************/
+  15              	
+  16              	/*****************************************************************************
+  17              	 *                         Preprocessor Definitions                          *
+  18              	 *                         ------------------------                          *
+  19              	 * VECTORS_IN_RAM                                                            *
+  20              	 *                                                                           *
+  21              	 *   If defined, an area of RAM will large enough to store the vector table  *
+  22              	 *   will be reserved.                                                       *
+  23              	 *                                                                           *
+  24              	 *****************************************************************************/
+  25              	
+  26              	  .syntax unified
+  27              	  .code 16
+  28              	
+  29              	  .section .init, "ax"
+  30              	  .align 0
+  31              	
+  32              	/*****************************************************************************
+  33              	 * Default Exception Handlers                                                *
+  34              	 *****************************************************************************/
+  35              	
+  36              	  .thumb_func
+  37              	  .weak NMI_Handler
+  38              	NMI_Handler:
+  39 0000 FEE7     	  b .
+  40              	
+  41              	  .thumb_func
+  42              	  .weak HardFault_Handler
+  43              	HardFault_Handler:
+  44 0002 FEE7     	  b .
+  45              	
+  46              	  .thumb_func
+  47              	  .weak MemoryManagement_Handler
+  48              	MemoryManagement_Handler:
+  49 0004 FEE7     	  b .
+  50              	
+  51              	  .thumb_func
+  52              	  .weak BusFault_Handler
+  53              	BusFault_Handler:
+  54 0006 FEE7     	  b .
+  55              	
+  56              	  .thumb_func
+  57              	  .weak UsageFault_Handler
+  58              	UsageFault_Handler:
+  59 0008 FEE7     	  b .
+  60              	
+  61              	  .thumb_func
+  62              	  .weak SVC_Handler
+  63              	SVC_Handler:
+  64 000a FEE7     	  b .
+  65              	
+  66              	  .thumb_func
+  67              	  .weak DebugMon_Handler
+  68              	DebugMon_Handler:
+  69 000c FEE7     	  b .
+  70              	
+  71              	  .thumb_func
+  72              	  .weak PendSV_Handler
+  73              	PendSV_Handler:
+  74 000e FEE7     	  b .
+  75              	
+  76              	  .thumb_func
+  77              	  .weak SysTick_Handler
+  78              	SysTick_Handler:
+  79 0010 FEE7     	  b .
+  80              	
+  81              	  .thumb_func
+  82              	Dummy_Handler:
+  83 0012 FEE7     	  b .
+  84              	# 214 "/home/clzhou/Project work/ELEC-E8004-Mixer-Project-Work/app/nRF/Source/ses_nrf52840_Vectors.
+  85              	  .thumb_func
+  86              	  .weak POWER_CLOCK_IRQHandler
+  87              	POWER_CLOCK_IRQHandler:
+  88 0014 FEE7     	  b .
+  89              	
+  90              	  .thumb_func
+  91              	  .weak RADIO_IRQHandler
+  92              	RADIO_IRQHandler:
+  93 0016 FEE7     	  b .
+  94              	
+  95              	  .thumb_func
+  96              	  .weak UARTE0_UART0_IRQHandler
+  97              	UARTE0_UART0_IRQHandler:
+  98 0018 FEE7     	  b .
+  99              	
+ 100              	  .thumb_func
+ 101              	  .weak SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0_IRQHandler
+ 102              	SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0_IRQHandler:
+ 103 001a FEE7     	  b .
+ 104              	
+ 105              	  .thumb_func
+ 106              	  .weak SPIM1_SPIS1_TWIM1_TWIS1_SPI1_TWI1_IRQHandler
+ 107              	SPIM1_SPIS1_TWIM1_TWIS1_SPI1_TWI1_IRQHandler:
+ 108 001c FEE7     	  b .
+ 109              	
+ 110              	  .thumb_func
+ 111              	  .weak NFCT_IRQHandler
+ 112              	NFCT_IRQHandler:
+ 113 001e FEE7     	  b .
+ 114              	
+ 115              	  .thumb_func
+ 116              	  .weak GPIOTE_IRQHandler
+ 117              	GPIOTE_IRQHandler:
+ 118 0020 FEE7     	  b .
+ 119              	
+ 120              	  .thumb_func
+ 121              	  .weak SAADC_IRQHandler
+ 122              	SAADC_IRQHandler:
+ 123 0022 FEE7     	  b .
+ 124              	
+ 125              	  .thumb_func
+ 126              	  .weak TIMER0_IRQHandler
+ 127              	TIMER0_IRQHandler:
+ 128 0024 FEE7     	  b .
+ 129              	
+ 130              	  .thumb_func
+ 131              	  .weak TIMER1_IRQHandler
+ 132              	TIMER1_IRQHandler:
+ 133 0026 FEE7     	  b .
+ 134              	
+ 135              	  .thumb_func
+ 136              	  .weak TIMER2_IRQHandler
+ 137              	TIMER2_IRQHandler:
+ 138 0028 FEE7     	  b .
+ 139              	
+ 140              	  .thumb_func
+ 141              	  .weak RTC0_IRQHandler
+ 142              	RTC0_IRQHandler:
+ 143 002a FEE7     	  b .
+ 144              	
+ 145              	  .thumb_func
+ 146              	  .weak TEMP_IRQHandler
+ 147              	TEMP_IRQHandler:
+ 148 002c FEE7     	  b .
+ 149              	
+ 150              	  .thumb_func
+ 151              	  .weak RNG_IRQHandler
+ 152              	RNG_IRQHandler:
+ 153 002e FEE7     	  b .
+ 154              	
+ 155              	  .thumb_func
+ 156              	  .weak ECB_IRQHandler
+ 157              	ECB_IRQHandler:
+ 158 0030 FEE7     	  b .
+ 159              	
+ 160              	  .thumb_func
+ 161              	  .weak CCM_AAR_IRQHandler
+ 162              	CCM_AAR_IRQHandler:
+ 163 0032 FEE7     	  b .
+ 164              	
+ 165              	  .thumb_func
+ 166              	  .weak WDT_IRQHandler
+ 167              	WDT_IRQHandler:
+ 168 0034 FEE7     	  b .
+ 169              	
+ 170              	  .thumb_func
+ 171              	  .weak RTC1_IRQHandler
+ 172              	RTC1_IRQHandler:
+ 173 0036 FEE7     	  b .
+ 174              	
+ 175              	  .thumb_func
+ 176              	  .weak QDEC_IRQHandler
+ 177              	QDEC_IRQHandler:
+ 178 0038 FEE7     	  b .
+ 179              	
+ 180              	  .thumb_func
+ 181              	  .weak COMP_LPCOMP_IRQHandler
+ 182              	COMP_LPCOMP_IRQHandler:
+ 183 003a FEE7     	  b .
+ 184              	
+ 185              	  .thumb_func
+ 186              	  .weak SWI0_EGU0_IRQHandler
+ 187              	SWI0_EGU0_IRQHandler:
+ 188 003c FEE7     	  b .
+ 189              	
+ 190              	  .thumb_func
+ 191              	  .weak SWI1_EGU1_IRQHandler
+ 192              	SWI1_EGU1_IRQHandler:
+ 193 003e FEE7     	  b .
+ 194              	
+ 195              	  .thumb_func
+ 196              	  .weak SWI2_EGU2_IRQHandler
+ 197              	SWI2_EGU2_IRQHandler:
+ 198 0040 FEE7     	  b .
+ 199              	
+ 200              	  .thumb_func
+ 201              	  .weak SWI3_EGU3_IRQHandler
+ 202              	SWI3_EGU3_IRQHandler:
+ 203 0042 FEE7     	  b .
+ 204              	
+ 205              	  .thumb_func
+ 206              	  .weak SWI4_EGU4_IRQHandler
+ 207              	SWI4_EGU4_IRQHandler:
+ 208 0044 FEE7     	  b .
+ 209              	
+ 210              	  .thumb_func
+ 211              	  .weak SWI5_EGU5_IRQHandler
+ 212              	SWI5_EGU5_IRQHandler:
+ 213 0046 FEE7     	  b .
+ 214              	
+ 215              	  .thumb_func
+ 216              	  .weak TIMER3_IRQHandler
+ 217              	TIMER3_IRQHandler:
+ 218 0048 FEE7     	  b .
+ 219              	
+ 220              	  .thumb_func
+ 221              	  .weak TIMER4_IRQHandler
+ 222              	TIMER4_IRQHandler:
+ 223 004a FEE7     	  b .
+ 224              	
+ 225              	  .thumb_func
+ 226              	  .weak PWM0_IRQHandler
+ 227              	PWM0_IRQHandler:
+ 228 004c FEE7     	  b .
+ 229              	
+ 230              	  .thumb_func
+ 231              	  .weak PDM_IRQHandler
+ 232              	PDM_IRQHandler:
+ 233 004e FEE7     	  b .
+ 234              	
+ 235              	  .thumb_func
+ 236              	  .weak MWU_IRQHandler
+ 237              	MWU_IRQHandler:
+ 238 0050 FEE7     	  b .
+ 239              	
+ 240              	  .thumb_func
+ 241              	  .weak PWM1_IRQHandler
+ 242              	PWM1_IRQHandler:
+ 243 0052 FEE7     	  b .
+ 244              	
+ 245              	  .thumb_func
+ 246              	  .weak PWM2_IRQHandler
+ 247              	PWM2_IRQHandler:
+ 248 0054 FEE7     	  b .
+ 249              	
+ 250              	  .thumb_func
+ 251              	  .weak SPIM2_SPIS2_SPI2_IRQHandler
+ 252              	SPIM2_SPIS2_SPI2_IRQHandler:
+ 253 0056 FEE7     	  b .
+ 254              	
+ 255              	  .thumb_func
+ 256              	  .weak RTC2_IRQHandler
+ 257              	RTC2_IRQHandler:
+ 258 0058 FEE7     	  b .
+ 259              	
+ 260              	  .thumb_func
+ 261              	  .weak I2S_IRQHandler
+ 262              	I2S_IRQHandler:
+ 263 005a FEE7     	  b .
+ 264              	
+ 265              	  .thumb_func
+ 266              	  .weak FPU_IRQHandler
+ 267              	FPU_IRQHandler:
+ 268 005c FEE7     	  b .
+ 269              	
+ 270              	  .thumb_func
+ 271              	  .weak USBD_IRQHandler
+ 272              	USBD_IRQHandler:
+ 273 005e FEE7     	  b .
+ 274              	
+ 275              	  .thumb_func
+ 276              	  .weak UARTE1_IRQHandler
+ 277              	UARTE1_IRQHandler:
+ 278 0060 FEE7     	  b .
+ 279              	
+ 280              	  .thumb_func
+ 281              	  .weak QSPI_IRQHandler
+ 282              	QSPI_IRQHandler:
+ 283 0062 FEE7     	  b .
+ 284              	
+ 285              	  .thumb_func
+ 286              	  .weak CRYPTOCELL_IRQHandler
+ 287              	CRYPTOCELL_IRQHandler:
+ 288 0064 FEE7     	  b .
+ 289              	
+ 290              	  .thumb_func
+ 291              	  .weak SPIM3_IRQHandler
+ 292              	SPIM3_IRQHandler:
+ 293 0066 FEE7     	  b .
+ 294              	
+ 295              	  .thumb_func
+ 296              	  .weak PWM3_IRQHandler
+ 297              	PWM3_IRQHandler:
+ 298 0068 FEE7     	  b .
+ 299              	
+ 300              	
+ 301              	
+ 302              	/*****************************************************************************
+ 303              	 * Vector Table                                                              *
+ 304              	 *****************************************************************************/
+ 305              	
+ 306 006a 00BF     	  .section .vectors, "ax"
+ 307              	  .align 0
+ 308              	  .global _vectors
+ 309              	  .extern __stack_end__
+ 310              	  .extern Reset_Handler
+ 311              	
+ 312              	_vectors:
+ 313 0000 00000000 	  .word __stack_end__
+ 314 0004 00000000 	  .word Reset_Handler
+ 315 0008 00000000 	  .word NMI_Handler
+ 316 000c 00000000 	  .word HardFault_Handler
+ 317 0010 00000000 	  .word MemoryManagement_Handler
+ 318 0014 00000000 	  .word BusFault_Handler
+ 319 0018 00000000 	  .word UsageFault_Handler
+ 320 001c 00000000 	  .word 0 /* Reserved */
+ 321 0020 00000000 	  .word 0 /* Reserved */
+ 322 0024 00000000 	  .word 0 /* Reserved */
+ 323 0028 00000000 	  .word 0 /* Reserved */
+ 324 002c 00000000 	  .word SVC_Handler
+ 325 0030 00000000 	  .word DebugMon_Handler
+ 326 0034 00000000 	  .word 0 /* Reserved */
+ 327 0038 00000000 	  .word PendSV_Handler
+ 328 003c 00000000 	  .word SysTick_Handler
+ 329 0040 00000000 	  .word POWER_CLOCK_IRQHandler
+ 330 0044 00000000 	  .word RADIO_IRQHandler
+ 331 0048 00000000 	  .word UARTE0_UART0_IRQHandler
+ 332 004c 00000000 	  .word SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0_IRQHandler
+ 333 0050 00000000 	  .word SPIM1_SPIS1_TWIM1_TWIS1_SPI1_TWI1_IRQHandler
+ 334 0054 00000000 	  .word NFCT_IRQHandler
+ 335 0058 00000000 	  .word GPIOTE_IRQHandler
+ 336 005c 00000000 	  .word SAADC_IRQHandler
+ 337 0060 00000000 	  .word TIMER0_IRQHandler
+ 338 0064 00000000 	  .word TIMER1_IRQHandler
+ 339 0068 00000000 	  .word TIMER2_IRQHandler
+ 340 006c 00000000 	  .word RTC0_IRQHandler
+ 341 0070 00000000 	  .word TEMP_IRQHandler
+ 342 0074 00000000 	  .word RNG_IRQHandler
+ 343 0078 00000000 	  .word ECB_IRQHandler
+ 344 007c 00000000 	  .word CCM_AAR_IRQHandler
+ 345 0080 00000000 	  .word WDT_IRQHandler
+ 346 0084 00000000 	  .word RTC1_IRQHandler
+ 347 0088 00000000 	  .word QDEC_IRQHandler
+ 348 008c 00000000 	  .word COMP_LPCOMP_IRQHandler
+ 349 0090 00000000 	  .word SWI0_EGU0_IRQHandler
+ 350 0094 00000000 	  .word SWI1_EGU1_IRQHandler
+ 351 0098 00000000 	  .word SWI2_EGU2_IRQHandler
+ 352 009c 00000000 	  .word SWI3_EGU3_IRQHandler
+ 353 00a0 00000000 	  .word SWI4_EGU4_IRQHandler
+ 354 00a4 00000000 	  .word SWI5_EGU5_IRQHandler
+ 355 00a8 00000000 	  .word TIMER3_IRQHandler
+ 356 00ac 00000000 	  .word TIMER4_IRQHandler
+ 357 00b0 00000000 	  .word PWM0_IRQHandler
+ 358 00b4 00000000 	  .word PDM_IRQHandler
+ 359 00b8 00000000 	  .word Dummy_Handler /* Reserved */
+ 360 00bc 00000000 	  .word Dummy_Handler /* Reserved */
+ 361 00c0 00000000 	  .word MWU_IRQHandler
+ 362 00c4 00000000 	  .word PWM1_IRQHandler
+ 363 00c8 00000000 	  .word PWM2_IRQHandler
+ 364 00cc 00000000 	  .word SPIM2_SPIS2_SPI2_IRQHandler
+ 365 00d0 00000000 	  .word RTC2_IRQHandler
+ 366 00d4 00000000 	  .word I2S_IRQHandler
+ 367 00d8 00000000 	  .word FPU_IRQHandler
+ 368 00dc 00000000 	  .word USBD_IRQHandler
+ 369 00e0 00000000 	  .word UARTE1_IRQHandler
+ 370 00e4 00000000 	  .word QSPI_IRQHandler
+ 371 00e8 00000000 	  .word CRYPTOCELL_IRQHandler
+ 372 00ec 00000000 	  .word SPIM3_IRQHandler
+ 373 00f0 00000000 	  .word Dummy_Handler /* Reserved */
+ 374 00f4 00000000 	  .word PWM3_IRQHandler
+ 375              	_vectors_end:

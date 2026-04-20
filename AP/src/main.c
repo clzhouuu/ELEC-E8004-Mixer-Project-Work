@@ -2,7 +2,7 @@
 #include <string.h>
 #include "../include/bolt.h"
 #include "../include/message.h"
-#include "../include/create3.h"
+#include "../include/pi_UART.h"
 
 
 // CHANGE THIS FOR EACH ROBOT
@@ -39,6 +39,8 @@ static uint32_t get_tick(void) {
 // latest poses
 static RobotPoseMsg_t g_poses[NUM_ROBOTS];
 
+
+/*
 static int32_t isqrt(int32_t n) {
     if (n <= 0) return 0;
     int32_t x = n;
@@ -58,6 +60,8 @@ static int32_t distance(RobotPoseMsg_t* a, RobotPoseMsg_t* b) {
     return isqrt((int32_t)(sumsq >> 16));
 }
 
+*/
+
 // scan for new BOLT msgs
 static void receive_from_bolt(void) {
     if (!bolt_data_available()) {
@@ -67,7 +71,7 @@ static void receive_from_bolt(void) {
     uint8_t buf[BOLT_MAX_PAYLOAD];
     uint8_t len;
 
-    if (!bolt_recv(buf, &len)) {
+    if (!bolt_read(buf, &len)) {
         return;
     }
 
@@ -87,7 +91,7 @@ static void send_own_pose(uint32_t now_ms) {
     RobotPoseMsg_t pose;
     (void)now_ms;
 
-    if (!create3_get_pose(&pose)) {
+    if (!pi_uart_get_pose(&pose)) {
         return;
     }
 
@@ -143,8 +147,7 @@ static void update_stale_flags(uint32_t now_ms) {
             continue;
         }
 
-        uint32_t age = now_ms - g_poses[i].timestamp_ms;
-        if (age > 500u) {
+        if ((now_ms - g_poses[i].timestamp_ms) > 500u) {
             g_poses[i].status |= POSE_STATUS_STALE;
         }
     }
@@ -156,20 +159,26 @@ int main(void) {
 
     systick_init();
     bolt_init();
-    create3_init(OWN_ROBOT_ID);
+    pi_uart_init(OWN_ROBOT_ID);
 
 
     __enable_irq();
 
-    uint32_t last_control_ms = 0;
+    uint32_t last_control_ms = 0u;
 
     while (1) {
         uint32_t now = get_tick();
         
-        create3_poll(now);
-
-        // check for updates
+        pi_uart_poll(now);
+        send_own_pose(now);
         receive_from_bolt();
+
+        
+        if ((now - last_control_ms) >= CONTROL_PERIOD_MS) {
+            last_control_ms = now;
+            update_stale_flags(now);
+        }
+        
         /* every X ms (20 Hz) send pose and correction
         if ((now - last_control_ms) >= CONTROL_PERIOD_MS) {
             last_control_ms = now;

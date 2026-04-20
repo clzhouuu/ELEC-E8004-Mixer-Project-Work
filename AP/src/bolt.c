@@ -183,7 +183,9 @@ uint8_t bolt_read(uint8_t* buf, uint8_t* len) {
         return 0;
     }
 
-    for (uint8_t i = 0; i < msg_len; i++) {
+    uint8_t i;
+
+    for (i = 0; i < msg_len; i++) {
         buf[i] = temp[2 + i];
     }
 

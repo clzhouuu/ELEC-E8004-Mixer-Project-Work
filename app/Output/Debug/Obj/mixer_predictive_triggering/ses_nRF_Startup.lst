@@ -1,0 +1,112 @@
+   1              	# 1 "/home/clzhou/Project work/ELEC-E8004-Mixer-Project-Work/app/nRF/Source/ses_nRF_Startup.s"
+   2              	# 1 "<built-in>"
+   3              	# 1 "<command-line>"
+   4              	# 1 "/home/clzhou/Project work/ELEC-E8004-Mixer-Project-Work/app/nRF/Source/ses_nRF_Startup.s"
+   5              	/*****************************************************************************
+   6              	 *                   SEGGER Microcontroller GmbH & Co. KG                    *
+   7              	 *            Solutions for real time microcontroller applications           *
+   8              	 *****************************************************************************
+   9              	 *                                                                           *
+  10              	 *               (c) 2017 SEGGER Microcontroller GmbH & Co. KG               *
+  11              	 *                                                                           *
+  12              	 *           Internet: www.segger.com   Support: support@segger.com          *
+  13              	 *                                                                           *
+  14              	 *****************************************************************************/
+  15              	
+  16              	/*****************************************************************************
+  17              	 *                         Preprocessor Definitions                          *
+  18              	 *                         ------------------------                          *
+  19              	 * NO_FPU_ENABLE                                                             *
+  20              	 *                                                                           *
+  21              	 *   If defined, FPU will not be enabled.                                    *
+  22              	 *                                                                           *
+  23              	 * NO_STACK_INIT                                                             *
+  24              	 *                                                                           *
+  25              	 *   If defined, the stack pointer will not be initialised.                  *
+  26              	 *                                                                           *
+  27              	 * NO_SYSTEM_INIT                                                            *
+  28              	 *                                                                           *
+  29              	 *   If defined, the SystemInit() function will not be called. By default    *
+  30              	 *   SystemInit() is called after reset to enable the clocks and memories to *
+  31              	 *   be initialised prior to any C startup initialisation.                   *
+  32              	 *                                                                           *
+  33              	 * NO_VTOR_CONFIG                                                            *
+  34              	 *                                                                           *
+  35              	 *   If defined, the vector table offset register will not be configured.    *
+  36              	 *                                                                           *
+  37              	 * MEMORY_INIT                                                               *
+  38              	 *                                                                           *
+  39              	 *   If defined, the MemoryInit() function will be called. By default        *
+  40              	 *   MemoryInit() is called after SystemInit() to enable an external memory  *
+  41              	 *   controller.                                                             *
+  42              	 *                                                                           *
+  43              	 * STACK_INIT_VAL                                                            *
+  44              	 *                                                                           *
+  45              	 *   If defined, specifies the initial stack pointer value. If undefined,    *
+  46              	 *   the stack pointer will be initialised to point to the end of the        *
+  47              	 *   RAM segment.                                                            *
+  48              	 *                                                                           *
+  49              	 * VECTORS_IN_RAM                                                            *
+  50              	 *                                                                           *
+  51              	 *   If defined, the exception vectors will be copied from Flash to RAM.     *
+  52              	 *                                                                           *
+  53              	 *****************************************************************************/
+  54              	
+  55              	  .syntax unified
+  56              	
+  57              	  .global Reset_Handler
+  58              	
+  59              	
+  60              	
+  61              	  .extern _vectors
+  62              	
+  63              	  .section .init, "ax"
+  64              	  .thumb_func
+  65              	
+  66              	  .equ VTOR_REG, 0xE000ED08
+  67              	  .equ FPU_CPACR_REG, 0xE000ED88
+  68              	
+  69              	
+  70              	
+  71              	
+  72              	
+  73              	Reset_Handler:
+  74              	
+  75              	  /* Initialise main stack */
+  76 0000 0A48     	  ldr r0, =__RAM_segment_end__
+  77 0002 4FF00701 	  ldr r1, =0x7
+  78 0006 8843     	  bics r0, r1
+  79 0008 8546     	  mov sp, r0
+  80              	
+  81              	
+  82              	
+  83              	  /* Initialise system */
+  84 000a 0948     	  ldr r0, =SystemInit
+  85 000c 8047     	  blx r0
+  86              	# 106 "/home/clzhou/Project work/ELEC-E8004-Mixer-Project-Work/app/nRF/Source/ses_nRF_Startup.s"
+  87              	  /* Configure vector table offset register */
+  88 000e 0948     	  ldr r0, =VTOR_REG
+  89              	
+  90              	
+  91              	
+  92 0010 0949     	  ldr r1, =_vectors
+  93              	
+  94 0012 0160     	  str r1, [r0]
+  95              	
+  96              	
+  97              	
+  98              	  /* Enable FPU */
+  99 0014 0948     	  ldr r0, =FPU_CPACR_REG
+ 100 0016 0168     	  ldr r1, [r0]
+ 101 0018 41F47001 	  orr r1, r1, #(0xF << 20)
+ 102 001c 0160     	  str r1, [r0]
+ 103 001e BFF34F8F 	  dsb
+ 104 0022 BFF36F8F 	  isb
+ 105              	
+ 106              	
+ 107              	  /* Jump to program start */
+ 108 0026 FFF7FEBF 	  b _start
+ 108      00000000 
+ 108      00000000 
+ 108      000008ED 
+ 108      00E00000 

@@ -4,7 +4,7 @@
 #include "MSP432P4xx/gpio.h"
 #include "MSP432P4xx/uart.h"
 #include "board_config.h"
-#include "create3.h"
+#include "pi_UART.h"
 
 // this needs to be changed for Raspberry Pi
 
@@ -15,25 +15,25 @@ static uint8_t g_fresh_pose = 0;
 
 // states
 typedef enum {
-    C3_WAIT_START_A = 0,
-    C3_WAIT_START_B,
-    C3_WAIT_MSG_ID,
-    C3_WAIT_LENGTH,
-    C3_WAIT_PAYLOAD,
-    C3_WAIT_CHECKSUM
-} Create3RxState_t;
+    PI_WAIT_START_A = 0,
+    PI_WAIT_START_B,
+    PI_WAIT_MSG_ID,
+    PI_WAIT_LENGTH,
+    PI_WAIT_PAYLOAD,
+    PI_WAIT_CHECKSUM
+} PiRxState_t;
 
 // setup
-static Create3RxState_t g_state = C3_WAIT_START_A;
+static PiRxState_t g_state = PI_WAIT_START_A;
 static uint8_t g_msg_id = 0;
 static uint8_t g_length = 0;
 static uint8_t g_payload_idx = 0;
 static uint8_t g_checksum = 0;
-static uint8_t g_payload[CREATE3_MAX_PAYLOAD];
+static uint8_t g_payload[PI_UART_MAX_PAYLOAD];
 
 // reset
 static void parser_reset(void) {
-    g_state = C3_WAIT_START_A;
+    g_state = PI_WAIT_START_A;
     g_msg_id = 0;
     g_length = 0;
     g_payload_idx = 0;
@@ -41,74 +41,73 @@ static void parser_reset(void) {
 }
 
 // process a message
-static void process_odom_frame(uint32_t now_ms) {
-    Create3Payload_t odom;
+static void process_frame(uint32_t now_ms) {
+    PiPayload_t pose;
 
-    if (g_length != sizeof(Create3Payload_t)) {
+    if (g_length != sizeof(PiPayload_t)) {
         return;
     }
 
-    memcpy(&odom, g_payload, sizeof(odom));
+    memcpy(&pose, g_payload, sizeof(pose));
 
     g_latest_pose.timestamp_ms = now_ms;
     g_latest_pose.robot_id = g_robot_id;
     g_latest_pose.status = POSE_STATUS_VALID | POSE_STATUS_INITIALISED;
-    g_latest_pose.x_fp = FP_FROM_FLOAT(odom.x);
-    g_latest_pose.y_fp = FP_FROM_FLOAT(odom.y);
-    g_latest_pose.theta_fp = FP_FROM_FLOAT(odom.theta);
-    g_latest_pose.v_fp = FP_FROM_FLOAT(odom.v);
-    g_latest_pose.w_fp = FP_FROM_FLOAT(odom.w);
+    g_latest_pose.x_fp = FP_FROM_FLOAT(pose.x);
+    g_latest_pose.y_fp = FP_FROM_FLOAT(pose.y);
+    g_latest_pose.theta_fp = FP_FROM_FLOAT(pose.theta);
+    g_latest_pose.v_fp = FP_FROM_FLOAT(pose.v);
 
     g_fresh_pose = 1;
 }
 
 
 // byte by byte state parsing with structure START_A START_B MSG_ID LENGTH PAYLOAD CHECKSUM
-static void create3_feed_byte(uint8_t byte, uint32_t now_ms) {
+static void uart_feed_byte(uint8_t byte, uint32_t now_ms) {
     switch (g_state) {
-    case C3_WAIT_START_A:
-        if (byte == CREATE3_START_A) {
-            g_state = C3_WAIT_START_B;
+    case PI_WAIT_START_A:
+        if (byte == PI_UART_START_A) {
+            g_state = PI_WAIT_START_B;
         }
         break;
 
-    case C3_WAIT_START_B:
-        if (byte == CREATE3_START_B) {
-            g_state = C3_WAIT_MSG_ID;
+    case PI_WAIT_START_B:
+        if (byte == PI_UART_START_B) {
+            g_state = PI_WAIT_MSG_ID;
         } else {
             parser_reset();
         }
         break;
 
-    case C3_WAIT_MSG_ID:
+    case PI_WAIT_MSG_ID:
         g_msg_id = byte;
         g_checksum = byte;
-        g_state = C3_WAIT_LENGTH;
+        g_state = PI_WAIT_LENGTH;
         break;
 
-    case C3_WAIT_LENGTH:
-        if (byte == 0 || byte > CREATE3_MAX_PAYLOAD) {
+    case PI_WAIT_LENGTH:
+        if (byte == 0 || byte > PI_UART_MAX_PAYLOAD) {
             parser_reset();
             break;
         }
         g_length = byte;
         g_checksum ^= byte;
         g_payload_idx = 0;
-        g_state = C3_WAIT_PAYLOAD;
+        g_state = PI_WAIT_PAYLOAD;
         break;
 
-    case C3_WAIT_PAYLOAD:
+    case PI_WAIT_PAYLOAD:
         g_payload[g_payload_idx++] = byte;
         g_checksum ^= byte;
         if (g_payload_idx >= g_length) {
-            g_state = C3_WAIT_CHECKSUM;
+            g_state = PI_WAIT_CHECKSUM;
         }
         break;
 
-    case C3_WAIT_CHECKSUM:
+    case PI_WAIT_CHECKSUM:
         if (byte == g_checksum) {
-            if (g_msg_id == CREATE3_MSG_ODOM) {
-                process_odom_frame(now_ms);
+            if (g_msg_id == PI_UART_MSG_POSE) {
+                process_frame(now_ms);
             }
         }
         parser_reset();
@@ -121,7 +120,7 @@ static void create3_feed_byte(uint8_t byte, uint32_t now_ms) {
 }
 
 // public API
-void create3_init(uint8_t robot_id) {
+void pi_uart_init(uint8_t robot_id) {
     g_robot_id = robot_id;
     memset(&g_latest_pose, 0, sizeof(g_latest_pose));
     g_fresh_pose = 0;
@@ -156,15 +155,15 @@ void create3_init(uint8_t robot_id) {
 }
 
 // polling and processing
-void create3_poll(uint32_t now_ms) {
+void pi_uart_poll(uint32_t now_ms) {
     while (UART_getInterruptStatus(EUSCI_A0_BASE, EUSCI_A_UART_RECEIVE_INTERRUPT_FLAG)) {
         uint8_t byte = UART_receiveData(EUSCI_A0_BASE);
-        create3_feed_byte(byte, now_ms);
+        uart_feed_byte(byte, now_ms);
     }
 }
 
 // receiving pose
-uint8_t create3_get_pose(RobotPoseMsg_t *out_pose) {
+uint8_t pi_uart_get_pose(RobotPoseMsg_t *out_pose) {
     if (!g_fresh_pose) {
         return 0;
     }
