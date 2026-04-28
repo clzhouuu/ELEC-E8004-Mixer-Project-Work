@@ -2,6 +2,7 @@
 #define BOLT_H
 
 #include <stdint.h>
+#include <stddef.h>
 #include "message.h"
 
 // initialization

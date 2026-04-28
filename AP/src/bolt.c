@@ -20,6 +20,17 @@ static uint8_t pin_read(uint_fast8_t port, uint_fast16_t pin) {
     return GPIO_getInputPinValue(port, pin);
 }
 
+static uint8_t spi_txrx(uint8_t tx) {
+    while (!EUSCI_B_SPI_getInterruptStatus(
+        EUSCI_B0_BASE, EUSCI_B_SPI_TRANSMIT_INTERRUPT));
+    EUSCI_B_SPI_transmitData(EUSCI_B0_BASE, tx);
+ 
+    while (!EUSCI_B_SPI_getInterruptStatus(
+        EUSCI_B0_BASE, EUSCI_B_SPI_RECEIVE_INTERRUPT));
+    return EUSCI_B_SPI_receiveData(EUSCI_B0_BASE);
+}
+
+
 // BOLT inialization
 uint8_t bolt_init(void) {
 
@@ -81,7 +92,7 @@ uint8_t bolt_write(uint8_t* data, uint16_t len) {
     pin_set(BOLT_REQ_PORT, BOLT_REQ_PIN, 1);
 
     // queue full
-    uint32_t timeout = 10000;
+    uint32_t timeout = 100000;
     while (pin_read(BOLT_ACK_PORT, BOLT_ACK_PIN) == 0) {
         timeout--;
 
@@ -92,38 +103,26 @@ uint8_t bolt_write(uint8_t* data, uint16_t len) {
         }
     }
 
-    // send length as two bytes
-    while (!EUSCI_B_SPI_getInterruptStatus(
-        EUSCI_B0_BASE,
-        EUSCI_B_SPI_TRANSMIT_INTERRUPT));
-    EUSCI_B_SPI_transmitData(EUSCI_B0_BASE, len & 0xFF);
+    spi_txrx((uint8_t)(len & 0xFF));
+    spi_txrx((uint8_t)((len >> 8) & 0xFF));
 
-    while (!EUSCI_B_SPI_getInterruptStatus(
-        EUSCI_B0_BASE,
-        EUSCI_B_SPI_TRANSMIT_INTERRUPT));
-    EUSCI_B_SPI_transmitData(EUSCI_B0_BASE, (len >> 8) & 0xFF);
-
-    // send data over SPI
-    uint8_t i;
+    uint16_t i;
     for (i = 0; i < len; i++) {
-        while (!EUSCI_B_SPI_getInterruptStatus(
-            EUSCI_B0_BASE,
-            EUSCI_B_SPI_TRANSMIT_INTERRUPT));
-        EUSCI_B_SPI_transmitData(EUSCI_B0_BASE, data[i]);
+        spi_txrx(data[i]);
     }
 
-    // wait for last byte to finish
     while (EUSCI_B_SPI_isBusy(EUSCI_B0_BASE));
-
+ 
     pin_set(BOLT_REQ_PORT, BOLT_REQ_PIN, 0);
     pin_set(BOLT_MODE_PORT, BOLT_MODE_PIN, 0);
+ 
+    return 1;
 
-    return 1;  
 }
 
 // BOLT READ reading from CP to APP
 uint8_t bolt_read(uint8_t* buf, uint8_t* len) {
-    uint8_t temp[2 + 3 + BOLT_MAX_PAYLOAD + 1];
+    uint8_t temp[2 + BOLT_MAX_PAYLOAD];
 
     // MODE LOW, read
     pin_set(BOLT_MODE_PORT, BOLT_MODE_PIN, 0);
@@ -132,7 +131,7 @@ uint8_t bolt_read(uint8_t* buf, uint8_t* len) {
     pin_set(BOLT_REQ_PORT, BOLT_REQ_PIN, 1);
 
     // wait for ACK to go high
-    uint32_t timeout = 10000;
+    uint32_t timeout = 100000;
     while (pin_read(BOLT_ACK_PORT, BOLT_ACK_PIN) == 0) {
         timeout--;
 
@@ -150,19 +149,7 @@ uint8_t bolt_read(uint8_t* buf, uint8_t* len) {
             pin_set(BOLT_REQ_PORT, BOLT_REQ_PIN, 0);
             return 0;
         }
-
-        // send dummy byte to clock in data
-        while (!EUSCI_B_SPI_getInterruptStatus(
-            EUSCI_B0_BASE,
-            EUSCI_B_SPI_TRANSMIT_INTERRUPT));
-        EUSCI_B_SPI_transmitData(EUSCI_B0_BASE, 0x00);
-
-        // read bytes
-        while (!EUSCI_B_SPI_getInterruptStatus(
-            EUSCI_B0_BASE,
-            EUSCI_B_SPI_RECEIVE_INTERRUPT));
-        temp[raw_len] = EUSCI_B_SPI_receiveData(EUSCI_B0_BASE);
-        raw_len++;
+        temp[raw_len++] = spi_txrx(0x00);
     }
 
     // set REQ LOW
@@ -175,11 +162,11 @@ uint8_t bolt_read(uint8_t* buf, uint8_t* len) {
 
     uint16_t msg_len = ((uint16_t)temp[1] << 8) | temp[0];
 
-    if (msg_len > (3 + BOLT_MAX_PAYLOAD + 1)) {
+    if (msg_len == 0 || msg_len > BOLT_MAX_PAYLOAD) {
         return 0;
     }
 
-    if (raw_len != (uint8_t)(2 + msg_len)) {
+    if (raw_len < (uint8_t)(2 + msg_len)) {
         return 0;
     }
 

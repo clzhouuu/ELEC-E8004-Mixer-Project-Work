@@ -6,8 +6,6 @@
 #include "board_config.h"
 #include "pi_UART.h"
 
-// this needs to be changed for Raspberry Pi
-
 // local varibales
 static RobotPoseMsg_t g_latest_pose;
 static uint8_t g_robot_id = 0;
@@ -15,12 +13,12 @@ static uint8_t g_fresh_pose = 0;
 
 // states
 typedef enum {
-    PI_WAIT_START_A = 0,
-    PI_WAIT_START_B,
-    PI_WAIT_MSG_ID,
-    PI_WAIT_LENGTH,
-    PI_WAIT_PAYLOAD,
-    PI_WAIT_CHECKSUM
+    PI_WAIT_START_A = 0, // start byte 1
+    PI_WAIT_START_B, // start byte 2
+    PI_WAIT_MSG_ID, // message ID
+    PI_WAIT_LENGTH, // payload length
+    PI_WAIT_PAYLOAD, // payload bytes
+    PI_WAIT_CHECKSUM // checksum
 } PiRxState_t;
 
 // setup
@@ -31,7 +29,7 @@ static uint8_t g_payload_idx = 0;
 static uint8_t g_checksum = 0;
 static uint8_t g_payload[PI_UART_MAX_PAYLOAD];
 
-// reset
+// reset the settings back
 static void parser_reset(void) {
     g_state = PI_WAIT_START_A;
     g_msg_id = 0;
@@ -138,6 +136,7 @@ void pi_uart_init(uint8_t robot_id) {
         GPIO_PRIMARY_MODULE_FUNCTION
     );
 
+    // UART CONFIGURATIONS
     const eUSCI_UART_Config uartConfig = {
         EUSCI_A_UART_CLOCKSOURCE_SMCLK,
         6,
@@ -167,8 +166,49 @@ uint8_t pi_uart_get_pose(RobotPoseMsg_t *out_pose) {
     if (!g_fresh_pose) {
         return 0;
     }
-
+ 
     *out_pose = g_latest_pose;
     g_fresh_pose = 0;
     return 1;
+}
+
+// sends pose
+void pi_uart_send_pose(const RobotPoseMsg_t *pose) {
+    if (!pose)  {
+        return;
+    }
+
+    uint8_t payload[17];
+    payload[0] = pose->robot_id;
+    // copy fixed point values little-endian
+    memcpy(&payload[1], &pose->x_fp, 4);
+    memcpy(&payload[5], &pose->y_fp, 4);
+    memcpy(&payload[9], &pose->theta_fp, 4);
+    memcpy(&payload[13], &pose->v_fp, 4);
+ 
+    uint8_t msg_id = PI_UART_MSG_PEER_POSE; // 0x02
+    uint8_t length = sizeof(payload);
+ 
+    // compute checksum = XOR of msg_id, length, and all payload bytes
+    uint8_t checksum = msg_id ^ length;
+    uint8_t i;
+    for (i = 0; i < length; i++) {
+        checksum ^= payload[i];
+    }
+ 
+    // send frame byte by byte over UART TX, wait for TX buffer empty before each byte
+    #define UART_TX_BYTE(b) \
+        while (!(EUSCI_A0->IFG & EUSCI_A_IFG_TXIFG)); \
+        EUSCI_A0->TXBUF = (b)
+ 
+    UART_TX_BYTE(PI_UART_START_A);
+    UART_TX_BYTE(PI_UART_START_B);
+    UART_TX_BYTE(msg_id);
+    UART_TX_BYTE(length);
+    for (i = 0; i < length; i++) {
+        UART_TX_BYTE(payload[i]);
+    }
+    UART_TX_BYTE(checksum);
+ 
+    #undef UART_TX_BYTE
 }
