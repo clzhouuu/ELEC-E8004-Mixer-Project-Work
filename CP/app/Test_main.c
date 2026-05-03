@@ -265,41 +265,33 @@ int main(void)
         // pose from BOLT 
         if (BOLT_DATA_AVAILABLE)
         {
-            printf("# ID:%u BOLT_DATA_AVAILABLE=%d\n", TOS_NODE_ID, (int)BOLT_DATA_AVAILABLE);
             bolt_pkt_t ap_pkt;
             uint16_t len = bolt_read(&ap_pkt);
 
-            printf("# ID:%u BOLT len=%u type=%u expected=%u\r\n",
-                TOS_NODE_ID,
-                (unsigned)len,
-                (unsigned)ap_pkt.type,
-                (unsigned)BOLT_POSE);
+        printf("# ID:%u BOLT len=%u type=%u expected=%u\r\n",
+            TOS_NODE_ID,
+            (unsigned)len,
+            (unsigned)ap_pkt.type,
+            (unsigned)BOLT_POSE);
  
-        if (len == LEN_BOLT_POSE && ap_pkt.type == BOLT_POSE)
-        {
-            static uint32_t last_ts = 0;
-            if (ap_pkt.pose.timestamp_ms != last_ts)
+            if (len == LEN_BOLT_POSE && ap_pkt.type == BOLT_POSE)
             {
-                last_ts = ap_pkt.pose.timestamp_ms;
+                // write pose into our mixer slot
                 mixer_write(TOS_NODE_ID, &ap_pkt.pose, sizeof(pose_pkt_t));
                 printf("# ID:%u TX pose x=", TOS_NODE_ID);
                 print_fp(ap_pkt.pose.x_fp);
+
                 printf(" y=");
                 print_fp(ap_pkt.pose.y_fp);
+
                 printf("\n");
             }
             else
             {
+                // no valid pose 
                 mixer_write(TOS_NODE_ID, NULL, 1);
-                printf("# ID:%u stale pose rejected ts=%lu\n",
-                    TOS_NODE_ID, (unsigned long)ap_pkt.pose.timestamp_ms);
+                printf("# ID:%u no valid pose from AP\n", TOS_NODE_ID);
             }
-        }
-        else
-        {
-            mixer_write(TOS_NODE_ID, NULL, 1);
-            printf("# ID:%u no valid pose from AP\n", TOS_NODE_ID);
-        }
         }
         else
         {
@@ -331,6 +323,9 @@ int main(void)
         }
  
         t_ref = mixer_start();
+ 
+        // Flush stale BOLT messages after Mixer round
+        bolt_flush();
  
         // all mixer slots
         memset(pose_received, 0, sizeof(pose_received));
@@ -387,7 +382,7 @@ int main(void)
             gpi_tick_hybrid(),
             SYNC_LINE_OFFSET(t_ref)) < 0);
 
-        /* //----------------------
+        //----------------------
         bolt_pkt_t out_pkt;
         memset(&out_pkt, 0, sizeof(out_pkt));
 
@@ -430,13 +425,10 @@ int main(void)
         gpi_micro_sleep(10);
         NRF_P0->OUTCLR = BV(BOLT_CONF_TIMEREQ_PIN);
         //----------------------
-        */
+
         for (i = 0; i < MX_NUM_NODES; i++)
         {
-            if (!pose_received[i]){
-                printf("# ID:%u no pose for robot %u this round\n", TOS_NODE_ID, i+1);
-                continue;
-            }
+            if (!pose_received[i]) continue;
             if (received_poses[i].robot_id == TOS_NODE_ID) continue;
  
             bolt_pkt_t out_pkt;

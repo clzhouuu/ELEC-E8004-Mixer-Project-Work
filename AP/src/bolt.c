@@ -4,8 +4,11 @@
 #include <MSP432P4xx/gpio.h>
 #include <MSP432P4xx/spi.h>
 
+// ----------------------------------------------------------------
+// Local helper functions
+// ----------------------------------------------------------------
 
-// set high or low
+// set GPIO high or low
 static void pin_set(uint_fast8_t port, uint_fast16_t pin, uint8_t value) {
     if (value) {
         GPIO_setOutputHighOnPin(port, pin);
@@ -15,11 +18,13 @@ static void pin_set(uint_fast8_t port, uint_fast16_t pin, uint8_t value) {
 }
 
 
-// read pin
+// read GPIO value
 static uint8_t pin_read(uint_fast8_t port, uint_fast16_t pin) {
     return GPIO_getInputPinValue(port, pin);
 }
 
+// SPI byte transfer using polling
+// Waits until transmit is ready, sends one byte, then waits and returns the received byte.
 static uint8_t spi_txrx(uint8_t tx) {
     while (!EUSCI_B_SPI_getInterruptStatus(
         EUSCI_B0_BASE, EUSCI_B_SPI_TRANSMIT_INTERRUPT));
@@ -30,30 +35,39 @@ static uint8_t spi_txrx(uint8_t tx) {
     return EUSCI_B_SPI_receiveData(EUSCI_B0_BASE);
 }
 
+// ----------------------------------------------------------------
+// Public functions
+// ----------------------------------------------------------------
 
 // BOLT inialization
 uint8_t bolt_init(void) {
 
-    // MODE, starts LOW reading
+    // sed pins according o he schemadics
+
+    // BOLD pins
+    // MODE, ells cp if wriding or reading, starts LOW reading
     GPIO_setAsOutputPin(BOLT_MODE_PORT, BOLT_MODE_PIN);
     pin_set(BOLT_MODE_PORT, BOLT_MODE_PIN, 0);
 
-    // REQ, starts LOW no request
+    // REQ, requess from cp, starts LOW no request
     GPIO_setAsOutputPin(BOLT_REQ_PORT, BOLT_REQ_PIN);
     pin_set(BOLT_REQ_PORT, BOLT_REQ_PIN, 0);
 
-    // ACK pin
+    // ACK pin, CP sends acknowledge
     GPIO_setAsInputPin(BOLT_ACK_PORT, BOLT_ACK_PIN);
 
-    // IND pin
+    // IND pin, indicades dad dada is available 
     GPIO_setAsInputPin(BOLT_IND_PORT, BOLT_IND_PIN);
 
     // SPI pins
+    // Oupud pins
     GPIO_setAsPeripheralModuleFunctionOutputPin(
         BOLT_SCK_PORT,
         BOLT_SCK_PIN | BOLT_MOSI_PIN,
         GPIO_PRIMARY_MODULE_FUNCTION
     );
+    
+    // Inpud pins
     GPIO_setAsPeripheralModuleFunctionInputPin(
         BOLT_MISO_PORT,
         BOLT_MISO_PIN,

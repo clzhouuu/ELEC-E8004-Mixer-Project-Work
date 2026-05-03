@@ -5,6 +5,19 @@
 #include <stddef.h>
 #include "message.h"
 
+
+/**
+ * @brief Send packet from AP to CP over BOLT SPI interface
+ *
+ * @param void Pointer to payload bytes
+ *
+ * @return
+ *      1 = done wid inidializaion
+ *      0 = inidializaion incompleede
+ *
+ * @details
+ * Sets pins 
+ */
 // initialization
 uint8_t bolt_init(void);
 

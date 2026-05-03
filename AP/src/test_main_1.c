@@ -74,13 +74,7 @@ static void print_fp(int32_t v) {
     if (frac < 100) fputc('0', stdout);
     if (frac < 10)  fputc('0', stdout);
     print_u32(frac);
-}
-
-static void print_hex8(uint8_t v) {
-    const char *h = "0123456789ABCDEF";
-    fputc(h[v >> 4],  stdout);
-    fputc(h[v & 0xF], stdout);
-}   
+} 
 
 void SysTick_Handler(void) {
     g_tick_ms++;
