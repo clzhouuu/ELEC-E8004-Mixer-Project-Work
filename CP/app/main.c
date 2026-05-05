@@ -219,6 +219,8 @@ static void initialization(void)
         while (1);
     }
     printf("Logical node id: %u\n", node_id);
+    printf("MX_INITIATOR_ID logical: %u\n", MX_INITIATOR_ID);
+    printf("Is initiator: %s\n", (MX_INITIATOR_ID == node_id) ? "yes" : "no");
  
     // Seed Mixer RNG
     NRF_RNG->INTENCLR = BV_BY_NAME(RNG_INTENCLR_VALRDY, Clear);
@@ -244,13 +246,15 @@ int main(void)
  
     for (round = 1; ; round++)
     {
+        uint8_t my_slot = node_id + 1;
+
         // initialize mixer        
         mixer_init(node_id);
         mixer_set_weak_release_slot(MX_ROUND_LENGTH / 2);
         mixer_set_weak_return_msg((void*)-1);
  
         // initiator writes sync packet to slot 0
-        if (MX_INITIATOR_ID == TOS_NODE_ID)
+        if (MX_INITIATOR_ID == node_id)
         {
             bolt_pkt_t sync_pkt;
             memset(&sync_pkt, 0, sizeof(sync_pkt));
@@ -281,7 +285,7 @@ int main(void)
             if (ap_pkt.pose.timestamp_ms != last_ts)
             {
                 last_ts = ap_pkt.pose.timestamp_ms;
-                mixer_write(TOS_NODE_ID, &ap_pkt.pose, sizeof(pose_pkt_t));
+                mixer_write(my_slot, &ap_pkt.pose, sizeof(pose_pkt_t));
                 printf("# ID:%u TX pose x=", TOS_NODE_ID);
                 print_fp(ap_pkt.pose.x_fp);
                 printf(" y=");
@@ -290,21 +294,21 @@ int main(void)
             }
             else
             {
-                mixer_write(TOS_NODE_ID, NULL, 1);
+                mixer_write(my_slot, NULL, 1);
                 printf("# ID:%u stale pose rejected ts=%lu\n",
                     TOS_NODE_ID, (unsigned long)ap_pkt.pose.timestamp_ms);
             }
         }
         else
         {
-            mixer_write(TOS_NODE_ID, NULL, 1);
+            mixer_write(my_slot, NULL, 1);
             printf("# ID:%u no valid pose from AP\n", TOS_NODE_ID);
         }
         }
         else
         {
             // nothing from AP 
-            mixer_write(TOS_NODE_ID, NULL, 1);
+            mixer_write(my_slot, NULL, 1);
             printf("# ID:%u BOLT empty\n", TOS_NODE_ID);
         }
  
@@ -312,12 +316,12 @@ int main(void)
         // 5. Arm and start Mixer
         // ---------------------------------------------------------------
         mixer_arm(
-            ((MX_INITIATOR_ID == TOS_NODE_ID) ? MX_ARM_INITIATOR : 0) |
+            ((MX_INITIATOR_ID == node_id) ? MX_ARM_INITIATOR : 0) |
             ((1 == round) ? MX_ARM_INFINITE_SCAN : 0)
         );
  
         // Initiator waits a bit before starting so all nodes are ready
-        if (MX_INITIATOR_ID == TOS_NODE_ID)
+        if (MX_INITIATOR_ID == node_id)
         {
             while (gpi_tick_compare_hybrid(
                 gpi_tick_hybrid(),

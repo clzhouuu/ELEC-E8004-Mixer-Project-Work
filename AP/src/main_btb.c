@@ -110,6 +110,9 @@ static uint32_t get_tick(void) {
 // latest poses
 static RobotPoseMsg_t g_poses[NUM_ROBOTS];
 
+// AP-local receive time for stale detection
+static uint32_t g_pose_rx_time_ms[NUM_ROBOTS];
+
 // scan for new BOLT msgs
 static void receive_from_bolt(uint32_t now_ms) {
     while (bolt_data_available()) {
@@ -151,16 +154,18 @@ static void receive_from_bolt(uint32_t now_ms) {
         p->y_fp         = pkt->pose.y_fp;
         p->theta_fp     = pkt->pose.theta_fp;
         p->v_fp         = pkt->pose.v_fp;
-        p->timestamp_ms = now_ms;
+        p->timestamp_ms = pkt->pose.timestamp_ms; 
+        g_pose_rx_time_ms[id - 1] = now_ms;       
         p->status       = POSE_STATUS_VALID | POSE_STATUS_INITIALISED;
- 
-        printf("BOLT RX robot=%u  age=%lums  x=%.3f  y=%.3f  theta=%.3f  v=%.3f\r\n",
-               p->robot_id,
-               (unsigned long)(now_ms - p->timestamp_ms),
-               FP_TO_FLOAT(p->x_fp),
-               FP_TO_FLOAT(p->y_fp),
-               FP_TO_FLOAT(p->theta_fp),
-               FP_TO_FLOAT(p->v_fp));
+
+        printf("BOLT RX robot=%u  rx_age=%lums  pkt_ts=%lu  x=%.3f  y=%.3f  theta=%.3f  v=%.3f\r\n",
+            p->robot_id,
+            (unsigned long)(now_ms - g_pose_rx_time_ms[id - 1]),
+            (unsigned long)p->timestamp_ms,
+            FP_TO_FLOAT(p->x_fp),
+            FP_TO_FLOAT(p->y_fp),
+            FP_TO_FLOAT(p->theta_fp),
+            FP_TO_FLOAT(p->v_fp));
 
         pi_uart_send_pose(p);
     }
@@ -229,9 +234,11 @@ static void update_stale_flags(uint32_t now_ms) {
             continue;
         }
 
-        if ((now_ms - g_poses[i].timestamp_ms) > 500u) {
+        if ((now_ms - g_pose_rx_time_ms[i]) > 500u) {
             g_poses[i].status |= POSE_STATUS_STALE;
-            printf("[STALE] robot %u marked stale at t=%lu\r\n", i, (unsigned long)now_ms);
+            printf("[STALE] robot %u marked stale at t=%lu\r\n",
+                (unsigned)(i + 1),
+                (unsigned long)now_ms);
         }
     }
 }
