@@ -133,14 +133,14 @@
 #define MX_VERBOSE_PACKETS		0
 #define MX_VERBOSE_PROFILE		0
 
-#define MX_SMART_SHUTDOWN		1
+#define MX_SMART_SHUTDOWN		0
 // 0	no smart shutdown
 // 1	no unfinished neighbor, without full-rank map(s)
 // 2	no unfinished neighbor
 // 3	all nodes full rank
 // 4	all nodes full rank, all neighbors ACKed knowledge of this fact
 // 5	all nodes full rank, all nodes ACKed knowledge of this fact
-#define MX_SMART_SHUTDOWN_MODE	3
+#define MX_SMART_SHUTDOWN_MODE	1
 
 
 /*****************************************************************************/

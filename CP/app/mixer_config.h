@@ -18,7 +18,7 @@
 static const uint8_t nodes[] = { 1, 2, 3};
 
 #define MX_NUM_NODES			NUM_ELEMENTS(nodes)
-#define MX_INITIATOR_ID			0
+#define MX_INITIATOR_ID			1
 #define MX_PAYLOAD_ONLY			20 // 16B state and 4B control input for logging
 #define MX_PAYLOAD_SIZE			32 // +2 because of senderID + 2 because of rank and version + 2 prio and trigger + 1 slot_full_rank + 4 radio_on_time + 1 just to have a power of 2
 #define DEFAULT_MODE			0

@@ -23,6 +23,8 @@
 // Each board test position
 #define TEST_FIXED_POSE 1
 
+#define ENABLE_PI_UART_BINARY_TX 0
+
 static void get_fixed_pose(RobotPoseMsg_t *pose, uint32_t now_ms)
 {
     memset(pose, 0, sizeof(*pose));
@@ -113,64 +115,106 @@ static RobotPoseMsg_t g_poses[NUM_ROBOTS];
 // AP-local receive time for stale detection
 static uint32_t g_pose_rx_time_ms[NUM_ROBOTS];
 
-// scan for new BOLT msgs
-static void receive_from_bolt(uint32_t now_ms) {
-    while (bolt_data_available()) {
-
+// scan for new BOLT msgs// scan for new BOLT msgs
+static void receive_from_bolt(uint32_t now_ms)
+{
+    while (bolt_data_available())
+    {
         uint8_t buf[BOLT_MAX_PAYLOAD];
         uint8_t len = 0;
 
-        if (!bolt_read(buf, &len)) {
-            printf("BOLT RX read failed\r\n");        
+        if (!bolt_read(buf, &len))
+        {
+            print_str("BOLT RX read failed\r\n");
             continue;
         }
 
-        if (len < (uint8_t)LEN_BOLT_POSE) {
-            printf("BOLT RX too short len=%u (min %u)\r\n", len, (unsigned)LEN_BOLT_POSE);
+        if (len != (uint8_t)LEN_BOLT_POSE)
+        {
+            // Ignore non-pose / stale / short BOLT packets.
             continue;
         }
 
         bolt_pkt_t *pkt = (bolt_pkt_t*)buf;
 
-        if (pkt->type != BOLT_POSE) {
-            printf("BOLT RX unexpected type=%u (expected %u)\r\n", pkt->type, BOLT_POSE);
+        if (pkt->type != BOLT_POSE)
+        {
+            print_str("BOLT RX unexpected type=");
+            print_u32(pkt->type);
+            print_str(" expected=");
+            print_u32(BOLT_POSE);
+            print_str("\r\n");
             continue;
         }
 
         uint8_t id = pkt->pose.robot_id;
 
-        if (id < 1 || id > NUM_ROBOTS) {
-            printf("BOLT RX invalid robot_id=%u (range 1-%u)\r\n", id, NUM_ROBOTS);
-            continue;
-        }
-        if (id == OWN_ROBOT_ID) {
-            printf("BOLT RX ignoring own robot_id=%u\r\n", id);
+        if (id < 1 || id > NUM_ROBOTS)
+        {
+            print_str("BOLT RX invalid robot_id=");
+            print_u32(id);
+            print_str(" range=1-");
+            print_u32(NUM_ROBOTS);
+            print_str("\r\n");
             continue;
         }
 
-        RobotPoseMsg_t *p = &g_poses[id - 1];
+        if (id == OWN_ROBOT_ID)
+        {
+            // Normal: ignore own robot pose if it comes back.
+            continue;
+        }
+
+        uint8_t idx = id - 1;
+
+        uint32_t rx_gap_ms = 0;
+        if (g_pose_rx_time_ms[idx] != 0)
+        {
+            rx_gap_ms = now_ms - g_pose_rx_time_ms[idx];
+        }
+
+        // This is the important line for stale detection
+        g_pose_rx_time_ms[idx] = now_ms;
+
+        RobotPoseMsg_t *p = &g_poses[idx];
+
         p->robot_id     = id;
         p->x_fp         = pkt->pose.x_fp;
         p->y_fp         = pkt->pose.y_fp;
         p->theta_fp     = pkt->pose.theta_fp;
         p->v_fp         = pkt->pose.v_fp;
-        p->timestamp_ms = pkt->pose.timestamp_ms; 
-        g_pose_rx_time_ms[id - 1] = now_ms;       
+        p->timestamp_ms = pkt->pose.timestamp_ms;
         p->status       = POSE_STATUS_VALID | POSE_STATUS_INITIALISED;
 
-        printf("BOLT RX robot=%u  rx_age=%lums  pkt_ts=%lu  x=%.3f  y=%.3f  theta=%.3f  v=%.3f\r\n",
-            p->robot_id,
-            (unsigned long)(now_ms - g_pose_rx_time_ms[id - 1]),
-            (unsigned long)p->timestamp_ms,
-            FP_TO_FLOAT(p->x_fp),
-            FP_TO_FLOAT(p->y_fp),
-            FP_TO_FLOAT(p->theta_fp),
-            FP_TO_FLOAT(p->v_fp));
+        print_str("BOLT RX t=");
+        print_u32(p->timestamp_ms);
 
+        print_str("  robot=");
+        print_u32(p->robot_id);
+
+        print_str("  x=");
+        print_fp(p->x_fp);
+
+        print_str("  y=");
+        print_fp(p->y_fp);
+
+        print_str("  theta=");
+        print_fp(p->theta_fp);
+
+        print_str("  v=");
+        print_fp(p->v_fp);
+
+        print_str("  pkt_age=");
+        print_u32(rx_gap_ms);
+        print_str(" ms");
+                
+        print_str("\r\n");
+
+        #if ENABLE_PI_UART_BINARY_TX
         pi_uart_send_pose(p);
+        #endif
     }
 }
-
 
 // build and send own pose to CP
 static void send_own_pose(uint32_t now_ms) {
@@ -184,6 +228,10 @@ static void send_own_pose(uint32_t now_ms) {
     }
 #endif
 
+
+    pose.robot_id     = OWN_ROBOT_ID;
+    pose.timestamp_ms = now_ms;
+    pose.status       = POSE_STATUS_VALID | POSE_STATUS_INITIALISED;
     g_poses[OWN_ROBOT_ID - 1] = pose;
 
     bolt_pkt_t pkt;
@@ -224,25 +272,34 @@ static void send_own_pose(uint32_t now_ms) {
 }
 
 // mark as stale data if no update for a while
-static void update_stale_flags(uint32_t now_ms) {
+static void update_stale_flags(uint32_t now_ms)
+{
     uint8_t i;
-    for (i = 0; i < NUM_ROBOTS; i++) {
-        if (i == OWN_ROBOT_ID - 1) {
-            continue;
-        }
-        if (!(g_poses[i].status & POSE_STATUS_VALID)) {
-            continue;
-        }
 
-        if ((now_ms - g_pose_rx_time_ms[i]) > 500u) {
-            g_poses[i].status |= POSE_STATUS_STALE;
-            printf("[STALE] robot %u marked stale at t=%lu\r\n",
-                (unsigned)(i + 1),
-                (unsigned long)now_ms);
+    for (i = 0; i < NUM_ROBOTS; i++)
+    {
+        if (i == OWN_ROBOT_ID - 1)
+            continue;
+
+        if (!(g_poses[i].status & POSE_STATUS_VALID))
+            continue;
+
+        if ((now_ms - g_pose_rx_time_ms[i]) > 500u)
+        {
+            if (!(g_poses[i].status & POSE_STATUS_STALE))
+            {
+                g_poses[i].status |= POSE_STATUS_STALE;
+                g_poses[i].status &= ~POSE_STATUS_VALID;
+
+                print_str("[STALE] robot ");
+                print_u32(i + 1);
+                print_str(" marked stale at t=");
+                print_u32(now_ms);
+                print_str("\r\n");
+            }
         }
     }
 }
-
 
 int main(void) {
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;

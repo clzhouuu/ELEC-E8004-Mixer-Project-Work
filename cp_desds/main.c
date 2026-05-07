@@ -82,26 +82,30 @@ GPI_TRACE_CONFIG(main, GPI_TRACE_BASE_SELECTION);
 #include <string.h>
 
 //**************************************************************************************************
+//***** Profile Settings ***************************************************************************
+
+//**************************************************************************************************
 //***** Local Defines and Consts *******************************************************************
 
-// Slot 0 is reserved for the initiator sync packet.
-// Robot pose slots start at index 1: slot = node_id + 1
-// This requires MX_GENERATION_SIZE = MX_NUM_NODES + 1  (e.g. 4 for 3 robots)
-#define POSE_SLOT(logical_node_id)   ((logical_node_id) + 1)
+//**************************************************************************************************
+//***** Local Typedefs and Class Declarations ******************************************************
+
+//**************************************************************************************************
+//***** Forward Declarations ***********************************************************************
 
 //**************************************************************************************************
 //***** Local (Static) Variables *******************************************************************
 
-static uint8_t  node_id;
+static uint8_t  node_id;    
 static uint32_t round = 0;
 
 static pose_pkt_t received_poses[MX_NUM_NODES];
-static uint8_t    pose_received[MX_NUM_NODES];
+static uint8_t    pose_received[MX_NUM_NODES]; 
+
+
 
 //**************************************************************************************************
 //***** Global Variables ***************************************************************************
-
-// TOS_NODE_ID is placed in .data so tos-set-symbol can override it during testbed programming.
 uint16_t __attribute__((section(".data"))) TOS_NODE_ID = 0;
 
 //**************************************************************************************************
@@ -121,6 +125,8 @@ static void print_fp(int32_t v)
     printf("%lu.%03lu", (unsigned long)whole, (unsigned long)frac);
 }
 
+//**************************************************************************************************
+
 unsigned int all_flags_set(uint8_t *agg)
 {
     for (int i = 0; i < MX_NUM_NODES; ++i)
@@ -133,25 +139,16 @@ unsigned int all_flags_set(uint8_t *agg)
     return 1;
 }
 
-static void agg_rx_cb(volatile uint8_t *agg_is_valid, uint8_t *agg_local, uint8_t *agg_rx)
-{
-    (void)agg_is_valid;
-    (void)agg_local;
-    (void)agg_rx;
-}
-
-//**************************************************************************************************
-
 static void initialization(void)
 {
     gpi_platform_init();
     gpi_int_enable();
-
+ 
     // SysTick
     SysTick->LOAD = -1u;
     SysTick->VAL  = 0;
     SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_ENABLE_Msk;
-
+ 
     // Radio
     gpi_radio_init(MX_PHY_MODE);
     gpi_radio_set_tx_power(gpi_radio_dbm_to_power_level(MX_TX_PWR_DBM));
@@ -171,7 +168,7 @@ static void initialization(void)
             printf("ERROR: invalid MX_PHY_MODE\n");
             while (1);
     }
-
+ 
     // Wait for BOLT MCU to be ready
     gpi_milli_sleep(500);
     if (bolt_init() != 0)
@@ -183,7 +180,7 @@ static void initialization(void)
         }
     }
     printf("Hardware initialized.\n");
-
+ 
     // Get TOS_NODE_ID
     if (0 == TOS_NODE_ID)
     {
@@ -191,7 +188,7 @@ static void initialization(void)
         gpi_nrf_uicr_read(&data, 0, sizeof(data));
         if (0x55AA == data[0])
             TOS_NODE_ID = data[1];
-
+ 
         while (0 == TOS_NODE_ID)
         {
             printf("TOS_NODE_ID not set. Enter value (1, 2, or 3): ");
@@ -199,7 +196,7 @@ static void initialization(void)
             TOS_NODE_ID = atoi(getsn(s, sizeof(s)));
             printf("\nTOS_NODE_ID = %u\n", TOS_NODE_ID);
             if (0 == TOS_NODE_ID) continue;
-
+ 
             data[0] = 0x55AA;
             data[1] = TOS_NODE_ID;
             gpi_nrf_uicr_erase();
@@ -210,7 +207,7 @@ static void initialization(void)
         }
     }
     printf("Node ID: %u\n", TOS_NODE_ID);
-
+ 
     // Map physical node ID to logical Mixer ID
     for (node_id = 0; node_id < NUM_ELEMENTS(nodes); node_id++)
     {
@@ -222,7 +219,9 @@ static void initialization(void)
         while (1);
     }
     printf("Logical node id: %u\n", node_id);
-
+    printf("MX_INITIATOR_ID logical: %u\n", MX_INITIATOR_ID);
+    printf("Is initiator: %s\n", (MX_INITIATOR_ID == node_id) ? "yes" : "no");
+ 
     // Seed Mixer RNG
     NRF_RNG->INTENCLR = BV_BY_NAME(RNG_INTENCLR_VALRDY, Clear);
     NRF_RNG->CONFIG   = BV_BY_NAME(RNG_CONFIG_DERCEN, Enabled);
@@ -231,9 +230,10 @@ static void initialization(void)
     uint32_t rng_seed = NRF_RNG->VALUE * gpi_mulu_16x16(TOS_NODE_ID, gpi_tick_fast_native());
     NRF_RNG->TASKS_STOP = 1;
     mixer_rand_seed(rng_seed);
-
+ 
     mixer_print_config();
 }
+
 
 //**************************************************************************************************
 //***** Global Functions ***************************************************************************
@@ -241,128 +241,87 @@ static void initialization(void)
 int main(void)
 {
     initialization();
-
+ 
     Gpi_Hybrid_Tick t_ref = gpi_tick_hybrid();
-
-    // FIX: use logical node_id offset by 1 to avoid colliding with initiator slot 0
-    // Slot layout: 0 = sync (initiator), 1..MX_NUM_NODES = pose per robot (node_id + 1)
-    // Requires: MX_GENERATION_SIZE == MX_NUM_NODES + 1
-    const uint8_t my_slot = POSE_SLOT(node_id);
-
-    pose_pkt_t last_pose;
-    uint8_t have_last_pose = 0;
-    uint8_t pose_age_rounds = 0;
-
-    #define MAX_POSE_AGE_ROUNDS 5
-
+ 
     for (round = 1; ; round++)
     {
-        // Initialize Mixer
+        uint8_t my_slot = node_id + 1;
+
+        // initialize mixer        
         mixer_init(node_id);
-        mixer_init_agg(&agg_rx_cb);
-
-
-        #if MX_WEAK_ZEROS
         mixer_set_weak_release_slot(MX_ROUND_LENGTH / 2);
         mixer_set_weak_return_msg((void*)-1);
-        #endif
-
-        // Initiator writes sync packet to slot 0
-        if (MX_INITIATOR_ID == TOS_NODE_ID)
+ 
+        // initiator writes sync packet to slot 0
+        if (MX_INITIATOR_ID == node_id)
         {
             bolt_pkt_t sync_pkt;
             memset(&sync_pkt, 0, sizeof(sync_pkt));
-            sync_pkt.type       = BOLT_SYNC;
+            sync_pkt.type = BOLT_SYNC;
             sync_pkt.sync.round = (uint16_t)round;
             mixer_write(0, &sync_pkt.sync, sizeof(sync_pkt_t));
         }
-
-        // Wait until it is time to read from Bolt and arm Mixer
+ 
+        // bolt to mixer read 
         while (gpi_tick_compare_hybrid(gpi_tick_hybrid(), READ_AND_ARM_OFFSET(t_ref, ROUND_PERIOD)) < 0);
-
-        // Read pose from Bolt and write it into the correct Mixer slot.
-        // If AP sends in pulses and there is no fresh pose this round,
-        // reuse the last valid pose for a few rounds.
-        uint8_t wrote_pose_this_round = 0;
-
+ 
+        // pose from BOLT 
         if (BOLT_DATA_AVAILABLE)
         {
+            printf("# ID:%u BOLT_DATA_AVAILABLE=%d\n", TOS_NODE_ID, (int)BOLT_DATA_AVAILABLE);
             bolt_pkt_t ap_pkt;
             uint16_t len = bolt_read(&ap_pkt);
 
-            if (len == LEN_BOLT_POSE && ap_pkt.type == BOLT_POSE)
-            {
-                static uint32_t last_ts = 0;
-
-                if (ap_pkt.pose.timestamp_ms != last_ts)
-                {
-                    last_ts = ap_pkt.pose.timestamp_ms;
-
-                    // Make sure the pose identity matches this CP/robot.
-                    ap_pkt.pose.robot_id = TOS_NODE_ID;
-
-                    last_pose = ap_pkt.pose;
-                    have_last_pose = 1;
-                    pose_age_rounds = 0;
-
-                    mixer_write(my_slot, &last_pose, sizeof(pose_pkt_t));
-                    wrote_pose_this_round = 1;
-
-                    printf("# ID:%u TX fresh pose slot=%u x=", TOS_NODE_ID, my_slot);
-                    print_fp(last_pose.x_fp);
-                    printf(" y=");
-                    print_fp(last_pose.y_fp);
-                    printf("\n");
-                }
-            }
-        }
-
-        // No fresh AP pose this round: reuse cached pose if still young.
-        if (!wrote_pose_this_round)
+            printf("# ID:%u BOLT len=%u type=%u expected=%u\r\n",
+                TOS_NODE_ID,
+                (unsigned)len,
+                (unsigned)ap_pkt.type,
+                (unsigned)BOLT_POSE);
+ 
+        if (len == LEN_BOLT_POSE && ap_pkt.type == BOLT_POSE)
         {
-            if (have_last_pose && pose_age_rounds < MAX_POSE_AGE_ROUNDS)
+            static uint32_t last_ts = 0;
+            if (ap_pkt.pose.timestamp_ms != last_ts)
             {
-                pose_age_rounds++;
-
-                mixer_write(my_slot, &last_pose, sizeof(pose_pkt_t));
-
-                printf("# ID:%u TX cached pose slot=%u age=%u x=",
-                    TOS_NODE_ID, my_slot, pose_age_rounds);
-                print_fp(last_pose.x_fp);
+                last_ts = ap_pkt.pose.timestamp_ms;
+                mixer_write(my_slot, &ap_pkt.pose, sizeof(pose_pkt_t));
+                printf("# ID:%u TX pose x=", TOS_NODE_ID);
+                print_fp(ap_pkt.pose.x_fp);
                 printf(" y=");
-                print_fp(last_pose.y_fp);
+                print_fp(ap_pkt.pose.y_fp);
                 printf("\n");
             }
             else
             {
                 mixer_write(my_slot, NULL, 1);
-
-                printf("# ID:%u no fresh/cached pose\n", TOS_NODE_ID);
+                printf("# ID:%u stale pose rejected ts=%lu\n",
+                    TOS_NODE_ID, (unsigned long)ap_pkt.pose.timestamp_ms);
             }
         }
-
-        // Arm and start Mixer
-        uint8_t arm_flags = 0;
-
-        if (MX_INITIATOR_ID == TOS_NODE_ID)
+        else
         {
-            arm_flags = MX_ARM_INITIATOR;
+            mixer_write(my_slot, NULL, 1);
+            printf("# ID:%u no valid pose from AP\n", TOS_NODE_ID);
         }
-        else if (round == 1)
+        }
+        else
         {
-            arm_flags = MX_ARM_INFINITE_SCAN;
+            // nothing from AP 
+            mixer_write(my_slot, NULL, 1);
+            printf("# ID:%u BOLT empty\n", TOS_NODE_ID);
         }
-
-        printf("# ID:%u arm_flags=0x%x round=%lu\n",
-            TOS_NODE_ID, arm_flags, (unsigned long)round);
-
-        mixer_arm(arm_flags);
-
-        if (arm_flags & MX_ARM_INFINITE_SCAN)
-        {
-            // Follower is trying to join/rejoin: start scanning immediately.
-        }
-        else if (MX_INITIATOR_ID == TOS_NODE_ID)
+ 
+        // ---------------------------------------------------------------
+        // 5. Arm and start Mixer
+        // ---------------------------------------------------------------
+        mixer_arm(
+            ((MX_INITIATOR_ID == node_id) ? MX_ARM_INITIATOR : 0) |
+            ((1 == round) ? MX_ARM_INFINITE_SCAN : 0)
+        );
+ 
+        // Initiator waits a bit before starting so all nodes are ready
+        if (MX_INITIATOR_ID == node_id)
         {
             while (gpi_tick_compare_hybrid(
                 gpi_tick_hybrid(),
@@ -374,125 +333,131 @@ int main(void)
                 gpi_tick_hybrid(),
                 MIXER_OFFSET(t_ref, ROUND_PERIOD)) < 0);
         }
-
-        printf("# ID:%u before mixer_start round=%lu\n", TOS_NODE_ID, (unsigned long)round);
-
+ 
         t_ref = mixer_start();
-
-        printf("# ID:%u after mixer_start round=%lu\n", TOS_NODE_ID, (unsigned long)round);
-
-        // Read all Mixer slots
+ 
+        // all mixer slots
         memset(pose_received, 0, sizeof(pose_received));
-
         uint8_t msgs_decoded = 0;
         uint8_t msgs_failed  = 0;
         uint8_t i;
-
+ 
         for (i = 0; i < MX_GENERATION_SIZE; i++)
         {
             void *p = mixer_read(i);
-
-            // Slot 0 = sync packet from initiator
+ 
             if (i == 0)
             {
+                // slot 0 = sync packet from initiator
                 if (p != NULL && p != (void*)-1)
                 {
                     sync_pkt_t *s = (sync_pkt_t*)p;
-
                     if (round == 1)
-                    {
                         round = s->round;
-                        printf("# ID:%u synced to round=%lu\n",
-                            TOS_NODE_ID, (unsigned long)round);
-                    }
                     else if (s->round != round)
-                    {
-                        printf("# ID:%u round mismatch sync=%u local=%lu -> resync\n",
-                            TOS_NODE_ID, s->round, (unsigned long)round);
-
-                        // next loop iteration becomes round 1, enabling re-scan
-                        round = 0;
-                    }
+                        round = s->round - 1; // will increment at loop top
                 }
-                else if (MX_INITIATOR_ID != TOS_NODE_ID)
-                {
-                    printf("# ID:%u missed sync slot -> resync\n", TOS_NODE_ID);
-
-                    // next loop iteration becomes round 1, enabling re-scan
-                    round = 0;
-                }
-
                 continue;
             }
-
-            // Pose slots: slot 1 -> robot 1, slot 2 -> robot 2, etc.
-            uint8_t robot_index = i - 1;
-
-            if (robot_index >= MX_NUM_NODES)
-                continue;
-
+ 
+            // slots 1-3 = pose from node i
             if (p == NULL || p == (void*)-1)
             {
                 msgs_failed++;
-                printf("# ID:%u RX slot=%u empty/failed\n", TOS_NODE_ID, i);
                 continue;
             }
-
+ 
             pose_pkt_t *pose = (pose_pkt_t*)p;
-
-            received_poses[robot_index] = *pose;
-            pose_received[robot_index]  = 1;
-            msgs_decoded++;
-
-            printf("# ID:%u RX slot=%u robot_id=%u x=",
-                TOS_NODE_ID, i, pose->robot_id);
-            print_fp(pose->x_fp);
-            printf(" y=");
-            print_fp(pose->y_fp);
-            printf("\n");
+            uint8_t idx = pose->robot_id - 1; // 0-indexed
+ 
+            if (idx < MX_NUM_NODES)
+            {
+                received_poses[idx]  = *pose;
+                pose_received[idx]   = 1;
+                msgs_decoded++;
+            }
         }
-
+ 
         printf("# ID:%u round=%lu decoded=%u failed=%u\n",
             TOS_NODE_ID, (unsigned long)round, msgs_decoded, msgs_failed);
+ 
+        // write all received poses back to BOLT for the AP
+ 
+        // wait for sync
+        // write all received poses back to BOLT for the AP
 
-
-        // Wait for sync line timing before writing to Bolt
+        // wait for CP -> AP time
         while (gpi_tick_compare_hybrid(
             gpi_tick_hybrid(),
             SYNC_LINE_OFFSET(t_ref)) < 0);
 
+        /* //----------------------
+        bolt_pkt_t out_pkt;
+        memset(&out_pkt, 0, sizeof(out_pkt));
 
-        // Forward received poses from other robots back to AP via Bolt
+        out_pkt.type = BOLT_POSE;
+        out_pkt.pad  = 0;
+
+        static uint32_t fake_counter = 0;
+
+        out_pkt.pose.robot_id = 2;
+        out_pkt.pose.x_fp     = 80609 + fake_counter;
+        out_pkt.pose.y_fp     = 29491 + fake_counter;
+        out_pkt.pose.theta_fp = 51118;
+        out_pkt.pose.v_fp     = 13107;
+        out_pkt.pose.timestamp_ms = fake_counter;
+
+        fake_counter += 6554;
+
+        uint8_t rc = bolt_write((uint8_t*)&out_pkt, LEN_BOLT_POSE);
+
+        printf("\r\n# FAKE CP -> AP sent robot=%u x=", out_pkt.pose.robot_id);
+        print_fp(out_pkt.pose.x_fp);
+
+        printf(" y=");
+        print_fp(out_pkt.pose.y_fp);
+
+        printf(" ts=%lu\r\n",
+            (unsigned long)out_pkt.pose.timestamp_ms);
+
+        if (rc == 0)
+        {
+            printf("BOLT TX sent %u bytes OK\r\n", (unsigned)LEN_BOLT_POSE);
+        }
+        else
+        {
+            printf("BOLT TX write FAILED rc=%u\r\n", rc);
+        }
+
+        // now signal AP after packet is already written
+        NRF_P0->OUTSET = BV(BOLT_CONF_TIMEREQ_PIN);
+        gpi_micro_sleep(10);
+        NRF_P0->OUTCLR = BV(BOLT_CONF_TIMEREQ_PIN);
+        //----------------------
+        */
         for (i = 0; i < MX_NUM_NODES; i++)
         {
-            if (!pose_received[i])
-            {
-                printf("# ID:%u no pose for robot %u this round\n",
-                    TOS_NODE_ID, i + 1);
+            if (!pose_received[i]){
+                printf("# ID:%u no pose for robot %u this round\n", TOS_NODE_ID, i+1);
                 continue;
             }
-
-            pose_pkt_t *pose = &received_poses[i];
-
-            // Do not echo the local node's own pose back to its AP
-            if (pose->robot_id == TOS_NODE_ID)
-                continue;
-
+            if (received_poses[i].robot_id == TOS_NODE_ID) continue;
+ 
             bolt_pkt_t out_pkt;
             memset(&out_pkt, 0, sizeof(out_pkt));
-
             out_pkt.type = BOLT_POSE;
-            out_pkt.pose = *pose;
-
+            out_pkt.pose = received_poses[i];
+ 
             bolt_write((uint8_t*)&out_pkt, LEN_BOLT_POSE);
-
+ 
             printf("\r\n# ID:%u forwarded pose from robot %u to AP\n",
-                TOS_NODE_ID, pose->robot_id);
+                TOS_NODE_ID, received_poses[i].robot_id);
         }
     }
-
+ 
     GPI_TRACE_RETURN(0);
 }
+
 
 //**************************************************************************************************
 //**************************************************************************************************

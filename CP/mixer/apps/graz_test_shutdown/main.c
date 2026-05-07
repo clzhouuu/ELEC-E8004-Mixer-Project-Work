@@ -403,8 +403,10 @@ int main()
 
 		// start first round with infinite scan
 		// -> nodes join next available round, does not require simultaneous boot-up
-		mixer_arm(((MX_INITIATOR_ID == NODE_ID) ? MX_ARM_INITIATOR : 0) | ((1 == round) ? MX_ARM_INFINITE_SCAN : 0));
-
+		mixer_arm(
+			((MX_INITIATOR_ID == TOS_NODE_ID) ? MX_ARM_INITIATOR : 0) |
+			((1 == round) ? MX_ARM_INFINITE_SCAN : 0)
+		);
 		// delay initiator a bit
 		// -> increase probability that all nodes are ready when initiator starts the round
 		// -> avoid problems in view of limited deadline accuracy
