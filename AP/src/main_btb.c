@@ -9,7 +9,7 @@
 #include <stddef.h>
 
 // CHANGE THIS FOR EACH ROBOT
-#define OWN_ROBOT_ID        1u
+#define OWN_ROBOT_ID        2u
 
 // WHAT DO WE WANT THE CLOCK SPEED TO BE? 20Hz?
 #define SMCLK_HZ            12000000u
@@ -21,9 +21,10 @@
 #define SAFETY_RADIUS_M     0.5f
 
 // Each board test position
-#define TEST_FIXED_POSE 1
-
-#define ENABLE_PI_UART_BINARY_TX 0
+#define TEST_FIXED_POSE 0
+#define DEBUG_PRINTS 1
+#define ENABLE_PI_UART_JSON_TX 0
+#define DUMMY_JSON_TEST 1
 
 static void get_fixed_pose(RobotPoseMsg_t *pose, uint32_t now_ms)
 {
@@ -37,6 +38,8 @@ static void get_fixed_pose(RobotPoseMsg_t *pose, uint32_t now_ms)
         pose->y_fp     = 65536;   // 1.000
         pose->theta_fp = 0;
         pose->v_fp     = 0;
+        pose->wz_fp    = 0;
+
     }
     else if (OWN_ROBOT_ID == 2)
     {
@@ -44,6 +47,8 @@ static void get_fixed_pose(RobotPoseMsg_t *pose, uint32_t now_ms)
         pose->y_fp     = 131072;  // 2.000
         pose->theta_fp = 0;
         pose->v_fp     = 0;
+        pose->wz_fp    = 0;
+
     }
     else if (OWN_ROBOT_ID == 3)
     {
@@ -51,6 +56,8 @@ static void get_fixed_pose(RobotPoseMsg_t *pose, uint32_t now_ms)
         pose->y_fp     = 196608;  // 3.000
         pose->theta_fp = 0;
         pose->v_fp     = 0;
+        pose->wz_fp    = 0;
+
     }
 
     pose->timestamp_ms = now_ms;
@@ -69,19 +76,28 @@ int fputc(int c, FILE *f) {
 }
 
 static void print_str(const char *s) {
+#if DEBUG_PRINTS
     while (*s) fputc(*s++, stdout);
+#else
+    (void)s;
+#endif
 }
 
 static void print_u32(uint32_t v) {
+#if DEBUG_PRINTS
     char buf[11];
     int i = 10;
     buf[i] = '\0';
     if (v == 0) { fputc('0', stdout); return; }
     while (v && i > 0) { buf[--i] = '0' + (v % 10); v /= 10; }
     print_str(buf + i);
+#else
+    (void)v;
+#endif
 }
 
 static void print_fp(int32_t v) {
+#if DEBUG_PRINTS
     if (v < 0) { fputc('-', stdout); v = -v; }
     uint32_t whole = (uint32_t)v >> 16;
     uint32_t frac  = ((uint32_t)v & 0xFFFF) * 1000 / 65536;
@@ -90,6 +106,9 @@ static void print_fp(int32_t v) {
     if (frac < 100) fputc('0', stdout);
     if (frac < 10)  fputc('0', stdout);
     print_u32(frac);
+#else
+    (void)v;
+#endif
 }
 
 
@@ -183,6 +202,7 @@ static void receive_from_bolt(uint32_t now_ms)
         p->y_fp         = pkt->pose.y_fp;
         p->theta_fp     = pkt->pose.theta_fp;
         p->v_fp         = pkt->pose.v_fp;
+        p->wz_fp        = pkt->pose.wz_fp;
         p->timestamp_ms = pkt->pose.timestamp_ms;
         p->status       = POSE_STATUS_VALID | POSE_STATUS_INITIALISED;
 
@@ -204,13 +224,16 @@ static void receive_from_bolt(uint32_t now_ms)
         print_str("  v=");
         print_fp(p->v_fp);
 
+        print_str("  wz=");
+        print_fp(p->wz_fp);
+
         print_str("  pkt_age=");
         print_u32(rx_gap_ms);
         print_str(" ms");
                 
         print_str("\r\n");
 
-        #if ENABLE_PI_UART_BINARY_TX
+        #if ENABLE_PI_UART_JSON_TX
         pi_uart_send_pose(p);
         #endif
     }
@@ -244,6 +267,7 @@ static void send_own_pose(uint32_t now_ms) {
     pkt.pose.y_fp         = pose.y_fp;
     pkt.pose.theta_fp     = pose.theta_fp;
     pkt.pose.v_fp         = pose.v_fp;
+    pkt.pose.wz_fp         = pose.wz_fp;
     pkt.pose.timestamp_ms = now_ms;
 
     print_str("POSE TX t=");
@@ -258,6 +282,8 @@ static void send_own_pose(uint32_t now_ms) {
     print_fp(pose.theta_fp);
     print_str("  v=");
     print_fp(pose.v_fp);
+    print_str("  wz=");
+    print_fp(pose.wz_fp);
     print_str("\r\n");
 
     uint8_t ok = bolt_write((uint8_t*)&pkt, (uint16_t)LEN_BOLT_POSE);
@@ -308,20 +334,59 @@ int main(void) {
     CS_initClockSignal(CS_SMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
 
     pi_uart_init(OWN_ROBOT_ID);
+    
+    #if DUMMY_JSON_TEST
+    pi_uart_test_dummy_json();
 
-    printf("\r\n*** AP FIXED POSE TEST BOOT ***\r\n");
+    #if DEBUG_PRINTS
+    RobotPoseMsg_t test_pose;
+    if (pi_uart_get_pose(&test_pose)) {
+        print_str("DUMMY JSON PARSED x=");
+        print_fp(test_pose.x_fp);
+        print_str(" y=");
+        print_fp(test_pose.y_fp);
+        print_str(" yaw=");
+        print_fp(test_pose.theta_fp);
+        print_str(" vx=");
+        print_fp(test_pose.v_fp);
+        print_str(" wz=");
+        print_fp(test_pose.wz_fp);
+        print_str("\r\n");
+
+        // Put it back so send_own_pose() can still use it later
+        pi_uart_test_dummy_json();
+    }
+    else {
+        print_str("DUMMY JSON FAILED\r\n");
+    }
+    #endif
+
+    #endif
+
+    #if DEBUG_PRINTS
+    printf("\r\n*** AP JSON POSE BOOT ***\r\n");
     printf("OWN_ROBOT_ID=%u\r\n", OWN_ROBOT_ID);
     printf("TEST_FIXED_POSE=%u\r\n", TEST_FIXED_POSE);
+    #endif
 
     systick_init();
 
+    #if DEBUG_PRINTS
     printf("before bolt_init\r\n");
+    #endif
+
     uint8_t b = bolt_init();
+
+    #if DEBUG_PRINTS
     printf("after bolt_init = %u\r\n", b);
+    #endif
 
     __enable_irq();
 
+    #if DEBUG_PRINTS
     printf("enter loop\r\n");
+    #endif
+
     uint32_t last_control_ms = 0u;
 
     while (1) {

@@ -20,6 +20,7 @@ typedef struct {
     int32_t y_fp; // y coordinate
     int32_t theta_fp; // orientation
     int32_t v_fp; // linear velocity
+    int32_t wz_fp; // linear velocity
     uint8_t robot_id; // 0, 1, or 2
     uint8_t status; // see POSE_STATUS_* flags
 } __attribute__((packed)) RobotPoseMsg_t;
@@ -61,6 +62,7 @@ typedef struct __attribute__((packed))
     int32_t  y_fp;
     int32_t  theta_fp;
     int32_t  v_fp;
+    int32_t  wz_fp;
     uint32_t timestamp_ms;
 } pose_pkt_t;
 

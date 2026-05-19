@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <msp432p401r.h>
 #include "MSP432P4xx/gpio.h"
 #include "MSP432P4xx/uart.h"
@@ -11,109 +12,72 @@ static RobotPoseMsg_t g_latest_pose;
 static uint8_t g_robot_id = 0;
 static uint8_t g_fresh_pose = 0;
 
-// states
-typedef enum {
-    PI_WAIT_START_A = 0, // start byte 1
-    PI_WAIT_START_B, // start byte 2
-    PI_WAIT_MSG_ID, // message ID
-    PI_WAIT_LENGTH, // payload length
-    PI_WAIT_PAYLOAD, // payload bytes
-    PI_WAIT_CHECKSUM // checksum
-} PiRxState_t;
 
-// setup
-static PiRxState_t g_state = PI_WAIT_START_A;
-static uint8_t g_msg_id = 0;
-static uint8_t g_length = 0;
-static uint8_t g_payload_idx = 0;
-static uint8_t g_checksum = 0;
-static uint8_t g_payload[PI_UART_MAX_PAYLOAD];
+static char g_line_buf[PI_UART_MAX_PAYLOAD + 1];
+static uint8_t g_line_idx = 0;
 
-// reset the settings back
-static void parser_reset(void) {
-    g_state = PI_WAIT_START_A;
-    g_msg_id = 0;
-    g_length = 0;
-    g_payload_idx = 0;
-    g_checksum = 0;
-}
+static void process_json_line(const char *json, uint32_t now_ms)
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float yaw = 0.0f;
+    float vx = 0.0f;
+    float wz = 0.0f;
 
-// process a message
-static void process_frame(uint32_t now_ms) {
-    PiPayload_t pose;
+    int matched = sscanf(
+        json,
+        "{\"x\": %f, \"y\": %f, \"yaw\": %f, \"vx\": %f, \"wz\": %f}",
+        &x, &y, &yaw, &vx, &wz
+    );
 
-    if (g_length != sizeof(PiPayload_t)) {
-        return;
+    if (matched < 4) {
+        matched = sscanf(
+            json,
+            "{\"x\":%f,\"y\":%f,\"yaw\":%f,\"vx\":%f,\"wz\":%f}",
+            &x, &y, &yaw, &vx, &wz
+        );
     }
 
-    memcpy(&pose, g_payload, sizeof(pose));
+    if (matched < 4) {
+        return;
+    }
 
     g_latest_pose.timestamp_ms = now_ms;
     g_latest_pose.robot_id = g_robot_id;
     g_latest_pose.status = POSE_STATUS_VALID | POSE_STATUS_INITIALISED;
-    g_latest_pose.x_fp = FP_FROM_FLOAT(pose.x);
-    g_latest_pose.y_fp = FP_FROM_FLOAT(pose.y);
-    g_latest_pose.theta_fp = FP_FROM_FLOAT(pose.theta);
-    g_latest_pose.v_fp = FP_FROM_FLOAT(pose.v);
+
+    g_latest_pose.x_fp = FP_FROM_FLOAT(x);
+    g_latest_pose.y_fp = FP_FROM_FLOAT(y);
+    g_latest_pose.theta_fp = FP_FROM_FLOAT(yaw);
+    g_latest_pose.v_fp = FP_FROM_FLOAT(vx);
+    g_latest_pose.wz_fp = FP_FROM_FLOAT(wz);
+
 
     g_fresh_pose = 1;
 }
 
+static void uart_feed_byte(uint8_t byte, uint32_t now_ms)
+{
+    if (byte == '\r') {
+        return;
+    }
 
-// byte by byte state parsing with structure START_A START_B MSG_ID LENGTH PAYLOAD CHECKSUM
-static void uart_feed_byte(uint8_t byte, uint32_t now_ms) {
-    switch (g_state) {
-    case PI_WAIT_START_A:
-        if (byte == PI_UART_START_A) {
-            g_state = PI_WAIT_START_B;
+    if (byte == '\n') {
+        g_line_buf[g_line_idx] = '\0';
+
+        if (g_line_idx > 0) {
+            process_json_line(g_line_buf, now_ms);
         }
-        break;
 
-    case PI_WAIT_START_B:
-        if (byte == PI_UART_START_B) {
-            g_state = PI_WAIT_MSG_ID;
-        } else {
-            parser_reset();
-        }
-        break;
+        g_line_idx = 0;
+        return;
+    }
 
-    case PI_WAIT_MSG_ID:
-        g_msg_id = byte;
-        g_checksum = byte;
-        g_state = PI_WAIT_LENGTH;
-        break;
-
-    case PI_WAIT_LENGTH:
-        if (byte == 0 || byte > PI_UART_MAX_PAYLOAD) {
-            parser_reset();
-            break;
-        }
-        g_length = byte;
-        g_checksum ^= byte;
-        g_payload_idx = 0;
-        g_state = PI_WAIT_PAYLOAD;
-        break;
-
-    case PI_WAIT_PAYLOAD:
-        g_payload[g_payload_idx++] = byte;
-        g_checksum ^= byte;
-        if (g_payload_idx >= g_length) {
-            g_state = PI_WAIT_CHECKSUM;
-        }
-        break;
-
-    case PI_WAIT_CHECKSUM:
-        if (byte == g_checksum) {
-            if (g_msg_id == PI_UART_MSG_POSE) {
-                process_frame(now_ms);
-            }
-        }
-        parser_reset();
-        break;
-
-    default:
-        parser_reset();
-        break;
+    if (g_line_idx < PI_UART_MAX_PAYLOAD) {
+        g_line_buf[g_line_idx++] = (char)byte;
+    } else {
+        // line too long, discard and wait for next newline
+        g_line_idx = 0;
     }
 }
 
@@ -122,7 +86,7 @@ void pi_uart_init(uint8_t robot_id) {
     g_robot_id = robot_id;
     memset(&g_latest_pose, 0, sizeof(g_latest_pose));
     g_fresh_pose = 0;
-    parser_reset();
+    g_line_idx = 0;
 
     GPIO_setAsPeripheralModuleFunctionInputPin(
         UART_RX_PORT,
@@ -178,37 +142,47 @@ void pi_uart_send_pose(const RobotPoseMsg_t *pose) {
         return;
     }
 
-    uint8_t payload[17];
-    payload[0] = pose->robot_id;
-    // copy fixed point values little-endian
-    memcpy(&payload[1], &pose->x_fp, 4);
-    memcpy(&payload[5], &pose->y_fp, 4);
-    memcpy(&payload[9], &pose->theta_fp, 4);
-    memcpy(&payload[13], &pose->v_fp, 4);
- 
-    uint8_t msg_id = PI_UART_MSG_PEER_POSE; // 0x02
-    uint8_t length = sizeof(payload);
- 
-    // compute checksum = XOR of msg_id, length, and all payload bytes
-    uint8_t checksum = msg_id ^ length;
-    uint8_t i;
-    for (i = 0; i < length; i++) {
-        checksum ^= payload[i];
+    char line[128];
+
+    float x   = FP_TO_FLOAT(pose->x_fp);
+    float y   = FP_TO_FLOAT(pose->y_fp);
+    float yaw = FP_TO_FLOAT(pose->theta_fp);
+    float vx  = FP_TO_FLOAT(pose->v_fp);
+    float wz  = FP_TO_FLOAT(pose->wz_fp);
+    
+    int n = snprintf(
+        line,
+        sizeof(line),
+        "{\"x\":%.3f,\"y\":%.3f,\"yaw\":%.3f,\"vx\":%.3f,\"wz\":%.3f}\n",
+        x,
+        y,
+        yaw,
+        vx,
+        wz
+    );
+
+    if (n <= 0 || n >= sizeof(line)) {
+        return;
     }
- 
-    // send frame byte by byte over UART TX, wait for TX buffer empty before each byte
-    #define UART_TX_BYTE(b) \
-        while (!(EUSCI_A0->IFG & EUSCI_A_IFG_TXIFG)); \
-        EUSCI_A0->TXBUF = (b)
- 
-    UART_TX_BYTE(PI_UART_START_A);
-    UART_TX_BYTE(PI_UART_START_B);
-    UART_TX_BYTE(msg_id);
-    UART_TX_BYTE(length);
-    for (i = 0; i < length; i++) {
-        UART_TX_BYTE(payload[i]);
+
+    int i;
+
+    for (i = 0; i < n; i++) {
+        while (!(EUSCI_A0->IFG & EUSCI_A_IFG_TXIFG));
+        EUSCI_A0->TXBUF = (uint8_t)line[i];
     }
-    UART_TX_BYTE(checksum);
- 
-    #undef UART_TX_BYTE
+}
+
+
+void pi_uart_test_dummy_json(void)
+{
+    const char *test =
+        "{\"x\": 1.234, \"y\": 2.345, \"yaw\": 0.500, \"vx\": 0.100, \"wz\": 0.050}\n";
+
+    uint32_t fake_time_ms = 1234;
+    uint16_t i;
+
+    for (i = 0; test[i] != '\0'; i++) {
+        uart_feed_byte((uint8_t)test[i], fake_time_ms);
+    }
 }

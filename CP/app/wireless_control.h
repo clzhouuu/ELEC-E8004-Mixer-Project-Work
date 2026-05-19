@@ -67,6 +67,7 @@ typedef struct __attribute__((packed))
     int32_t  y_fp;
     int32_t  theta_fp;
     int32_t  v_fp;
+    int32_t  wz_fp;
     uint32_t timestamp_ms;
 } pose_pkt_t;
 
