@@ -37,7 +37,7 @@ ORDERED_OBJS += \
 "./include/driverlib/MSP432P4xx/uart.obj" \
 "./include/driverlib/MSP432P4xx/wdt_a.obj" \
 "./src/bolt.obj" \
-"./src/main.obj" \
+"./src/main_btb.obj" \
 "./src/pi_UART.obj" \
 "../msp432p401r.cmd" \
 "../include/driverlib/MSP432P4xx/ccs/msp432p4xx_driverlib.lib" \
@@ -177,9 +177,9 @@ Mixer_com_AP.out: $(OBJS) $(CMD_SRCS) $(LIB_SRCS) $(A_SRCS) $(GEN_CMDS)
 clean:
 	-$(RM) $(EXE_OUTPUTS__QUOTED)
 	-$(RM) "startup_msp432p401r_ccs.obj" "system_msp432p401r.obj" "include/driverlib/MSP432P4xx/adc14.obj" "include/driverlib/MSP432P4xx/aes256.obj" "include/driverlib/MSP432P4xx/comp_e.obj" "include/driverlib/MSP432P4xx/cpu.obj" "include/driverlib/MSP432P4xx/crc32.obj" "include/driverlib/MSP432P4xx/cs.obj" "include/driverlib/MSP432P4xx/dma.obj" "include/driverlib/MSP432P4xx/flash.obj" "include/driverlib/MSP432P4xx/fpu.obj" "include/driverlib/MSP432P4xx/gpio.obj" "include/driverlib/MSP432P4xx/i2c.obj" "include/driverlib/MSP432P4xx/interrupt.obj" "include/driverlib/MSP432P4xx/mpu.obj" "include/driverlib/MSP432P4xx/pcm.obj" "include/driverlib/MSP432P4xx/pmap.obj" "include/driverlib/MSP432P4xx/pss.obj" "include/driverlib/MSP432P4xx/ref_a.obj" "include/driverlib/MSP432P4xx/reset.obj" "include/driverlib/MSP432P4xx/rtc_c.obj" "include/driverlib/MSP432P4xx/spi.obj" "include/driverlib/MSP432P4xx/sysctl.obj" "include/driverlib/MSP432P4xx/systick.obj" "include/driverlib/MSP432P4xx/timer32.obj" "include/driverlib/MSP432P4xx/timer_a.obj" 
-	-$(RM) "include/driverlib/MSP432P4xx/uart.obj" "include/driverlib/MSP432P4xx/wdt_a.obj" "src/bolt.obj" "src/main.obj" "src/pi_UART.obj" 
+	-$(RM) "include/driverlib/MSP432P4xx/uart.obj" "include/driverlib/MSP432P4xx/wdt_a.obj" "src/bolt.obj" "src/main_btb.obj" "src/pi_UART.obj" 
 	-$(RM) "startup_msp432p401r_ccs.d" "system_msp432p401r.d" "include/driverlib/MSP432P4xx/adc14.d" "include/driverlib/MSP432P4xx/aes256.d" "include/driverlib/MSP432P4xx/comp_e.d" "include/driverlib/MSP432P4xx/cpu.d" "include/driverlib/MSP432P4xx/crc32.d" "include/driverlib/MSP432P4xx/cs.d" "include/driverlib/MSP432P4xx/dma.d" "include/driverlib/MSP432P4xx/flash.d" "include/driverlib/MSP432P4xx/fpu.d" "include/driverlib/MSP432P4xx/gpio.d" "include/driverlib/MSP432P4xx/i2c.d" "include/driverlib/MSP432P4xx/interrupt.d" "include/driverlib/MSP432P4xx/mpu.d" "include/driverlib/MSP432P4xx/pcm.d" "include/driverlib/MSP432P4xx/pmap.d" "include/driverlib/MSP432P4xx/pss.d" "include/driverlib/MSP432P4xx/ref_a.d" "include/driverlib/MSP432P4xx/reset.d" "include/driverlib/MSP432P4xx/rtc_c.d" "include/driverlib/MSP432P4xx/spi.d" "include/driverlib/MSP432P4xx/sysctl.d" "include/driverlib/MSP432P4xx/systick.d" "include/driverlib/MSP432P4xx/timer32.d" "include/driverlib/MSP432P4xx/timer_a.d" "include/driverlib/MSP432P4xx/uart.d" 
-	-$(RM) "include/driverlib/MSP432P4xx/wdt_a.d" "src/bolt.d" "src/main.d" "src/pi_UART.d" 
+	-$(RM) "include/driverlib/MSP432P4xx/wdt_a.d" "src/bolt.d" "src/main_btb.d" "src/pi_UART.d" 
 	-@echo ' '
 
 .PHONY: all clean dependents

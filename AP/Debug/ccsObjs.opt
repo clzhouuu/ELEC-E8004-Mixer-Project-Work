@@ -27,7 +27,7 @@
 "./include/driverlib/MSP432P4xx/uart.obj"
 "./include/driverlib/MSP432P4xx/wdt_a.obj"
 "./src/bolt.obj"
-"./src/main.obj"
+"./src/main_btb.obj"
 "./src/pi_UART.obj"
 "../msp432p401r.cmd"
 "../include/driverlib/MSP432P4xx/ccs/msp432p4xx_driverlib.lib"

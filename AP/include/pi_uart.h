@@ -1,3 +1,13 @@
+/**
+ * pi_uart.h
+ * =========
+ * UART interface between the MSP432 Application Processor (AP) and the
+ * Raspberry Pi.
+ *
+ * Pose messages are newline-terminated JSON objects with these fields:
+ *   tag, seq, t_ns, x, y, z, qx, qy, qz, qw
+ */
+
 #ifndef PI_UART_H
 #define PI_UART_H
 

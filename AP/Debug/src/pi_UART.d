@@ -12,6 +12,8 @@ src/pi_UART.obj: /home/clzhou/ti/ARMthing/include/sys/_types.h
 src/pi_UART.obj: /home/clzhou/ti/ARMthing/include/machine/_types.h
 src/pi_UART.obj: /home/clzhou/ti/ARMthing/include/machine/_stdint.h
 src/pi_UART.obj: /home/clzhou/ti/ARMthing/include/sys/_stdint.h
+src/pi_UART.obj: /home/clzhou/ti/ARMthing/include/stdio.h
+src/pi_UART.obj: /home/clzhou/ti/ARMthing/include/stdarg.h
 src/pi_UART.obj: /home/clzhou/ti/ccs2050/ccs/ccs_base/arm/include/msp432p401r.h
 src/pi_UART.obj: /home/clzhou/ti/ccs2050/ccs/ccs_base/arm/include/msp_compatibility.h
 src/pi_UART.obj: /home/clzhou/ti/ccs2050/ccs/ccs_base/arm/include/msp432p401r_classic.h
@@ -27,6 +29,7 @@ src/pi_UART.obj: /home/clzhou/workspace_v9/Mixer_com_AP/include/driverlib/MSP432
 src/pi_UART.obj: /home/clzhou/workspace_v9/Mixer_com_AP/include/board_config.h
 src/pi_UART.obj: /home/clzhou/workspace_v9/Mixer_com_AP/include/pi_UART.h
 src/pi_UART.obj: /home/clzhou/workspace_v9/Mixer_com_AP/include/message.h
+src/pi_UART.obj: /home/clzhou/ti/ARMthing/include/stddef.h
 
 ../src/pi_UART.c:
 
@@ -51,6 +54,10 @@ src/pi_UART.obj: /home/clzhou/workspace_v9/Mixer_com_AP/include/message.h
 /home/clzhou/ti/ARMthing/include/machine/_stdint.h:
 
 /home/clzhou/ti/ARMthing/include/sys/_stdint.h:
+
+/home/clzhou/ti/ARMthing/include/stdio.h:
+
+/home/clzhou/ti/ARMthing/include/stdarg.h:
 
 /home/clzhou/ti/ccs2050/ccs/ccs_base/arm/include/msp432p401r.h:
 
@@ -81,4 +88,6 @@ src/pi_UART.obj: /home/clzhou/workspace_v9/Mixer_com_AP/include/message.h
 /home/clzhou/workspace_v9/Mixer_com_AP/include/pi_UART.h:
 
 /home/clzhou/workspace_v9/Mixer_com_AP/include/message.h:
+
+/home/clzhou/ti/ARMthing/include/stddef.h:
 

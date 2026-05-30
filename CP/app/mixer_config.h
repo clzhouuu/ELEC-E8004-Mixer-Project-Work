@@ -15,26 +15,26 @@
 
 // The array contains physical node IDs and their position in the array is the logical node ID.
 // static const uint8_t nodes[]	= { 1, 2, 3 };
-static const uint8_t nodes[] = { 1, 2, 3};
+static const uint8_t nodes[] = { 1, 2 };
 
 #define MX_NUM_NODES			NUM_ELEMENTS(nodes)
 #define MX_INITIATOR_ID			1
-#define MX_PAYLOAD_ONLY			20 // 16B state and 4B control input for logging
-#define MX_PAYLOAD_SIZE			32 // +2 because of senderID + 2 because of rank and version + 2 prio and trigger + 1 slot_full_rank + 4 radio_on_time + 1 just to have a power of 2
+#define MX_PAYLOAD_ONLY			52 // 16B state and 4B control input for logging
+#define MX_PAYLOAD_SIZE			64 // +2 because of senderID + 2 because of rank and version + 2 prio and trigger + 1 slot_full_rank + 4 radio_on_time + 1 just to have a power of 2
 #define DEFAULT_MODE			0
 
 #if DEFAULT_MODE == 0
 	// Entries in the plants array send probability values.
-	static const uint8_t plants[] = {1, 2, 3};
+	static const uint8_t plants[] = {1, 2 };
 
 	#define MX_ROUND_LENGTH				190 // in #slots
-	#define ROUND_PERIOD				GPI_TICK_MS_TO_HYBRID2(100)
+	#define ROUND_PERIOD				GPI_TICK_MS_TO_HYBRID2(200)
 	#define AGGREGATE_SIZE				6
-	#define MX_SLOT_LENGTH				GPI_TICK_US_TO_HYBRID2(400)
+	#define MX_SLOT_LENGTH				GPI_TICK_US_TO_HYBRID2(800)
 #endif
 
 #define NUM_PLANTS				NUM_ELEMENTS(plants)
-#define MX_GENERATION_SIZE		(NUM_ELEMENTS(plants) + 1) // + initiator
+#define MX_GENERATION_SIZE		(1 + MX_NUM_NODES) // + initiator
 
 
 // Possible values (Gpi_Radio_Mode):

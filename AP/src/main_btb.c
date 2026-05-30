@@ -4,244 +4,211 @@
 #include "../include/message.h"
 #include "../include/pi_UART.h"
 #include <MSP432P4xx/cs.h>
-#include <string.h>
 #include <stdio.h>
 #include <stddef.h>
 
 // CHANGE THIS FOR EACH ROBOT
-#define OWN_ROBOT_ID        2u
+#define OWN_ROBOT_ID        1u
 
-// WHAT DO WE WANT THE CLOCK SPEED TO BE? 20Hz?
 #define SMCLK_HZ            12000000u
+#define CONTROL_PERIOD_MS   200u
+#define STALE_TIMEOUT_MS    500u
+#define PEER_FWD_MIN_MS     50u
 
-// HOW OFTEN DO WE WANT THIS TO RUN
-#define CONTROL_PERIOD_MS   50u
+// Real Pi mode:
+//   TEST_FIXED_POSE 0
+//   DEBUG_PRINTS 0
+//   ENABLE_PI_UART_JSON_TX 1
+//   DUMMY_JSON_TEST 0
+#define TEST_FIXED_POSE             0
+#define DEBUG_PRINTS                1
+#define ENABLE_PI_UART_JSON_TX      1
+#define DUMMY_JSON_TEST             0
 
-// WHAT IS THE SAFETY RADIUS
-#define SAFETY_RADIUS_M     0.5f
 
-// Each board test position
-#define TEST_FIXED_POSE 0
-#define DEBUG_PRINTS 1
-#define ENABLE_PI_UART_JSON_TX 0
-#define DUMMY_JSON_TEST 1
+static uint16_t g_pose_seq = 0;
 
 static void get_fixed_pose(RobotPoseMsg_t *pose, uint32_t now_ms)
 {
     memset(pose, 0, sizeof(*pose));
-
     pose->robot_id = OWN_ROBOT_ID;
 
-    if (OWN_ROBOT_ID == 1)
-    {
-        pose->x_fp     = 65536;   // 1.000
-        pose->y_fp     = 65536;   // 1.000
-        pose->theta_fp = 0;
-        pose->v_fp     = 0;
-        pose->wz_fp    = 0;
-
-    }
-    else if (OWN_ROBOT_ID == 2)
-    {
-        pose->x_fp     = 131072;  // 2.000
-        pose->y_fp     = 131072;  // 2.000
-        pose->theta_fp = 0;
-        pose->v_fp     = 0;
-        pose->wz_fp    = 0;
-
-    }
-    else if (OWN_ROBOT_ID == 3)
-    {
-        pose->x_fp     = 196608;  // 3.000
-        pose->y_fp     = 196608;  // 3.000
-        pose->theta_fp = 0;
-        pose->v_fp     = 0;
-        pose->wz_fp    = 0;
-
+    if (OWN_ROBOT_ID == 1u) {
+        pose->x_fp = 65536;
+        pose->y_fp = 65536;
+    } else if (OWN_ROBOT_ID == 2u) {
+        pose->x_fp = 131072;
+        pose->y_fp = 131072;
+    } else if (OWN_ROBOT_ID == 3u) {
+        pose->x_fp = 196608;
+        pose->y_fp = 196608;
     }
 
-    pose->timestamp_ms = now_ms;
+    pose->z_fp = 0;
+    pose->qx_fp = 0;
+    pose->qy_fp = 0;
+    pose->qz_fp = 0;
+    pose->qw_fp = FP_FROM_FLOAT(1.0f);
+    pose->t_ns = ((uint64_t)now_ms) * 1000000ull;
     pose->status = POSE_STATUS_VALID | POSE_STATUS_INITIALISED;
 }
 
-// system timer
 static volatile uint32_t g_tick_ms = 0;
 
-
-int fputc(int c, FILE *f) {
+int fputc(int c, FILE *f)
+{
     (void)f;
+#if DEBUG_PRINTS
     while (!(EUSCI_A0->IFG & EUSCI_A_IFG_TXIFG));
     EUSCI_A0->TXBUF = (uint8_t)c;
+#endif
     return c;
 }
 
-static void print_str(const char *s) {
+static void print_str(const char *s)
+{
 #if DEBUG_PRINTS
-    while (*s) fputc(*s++, stdout);
+    while (*s) {
+        fputc(*s++, stdout);
+    }
 #else
     (void)s;
 #endif
 }
 
-static void print_u32(uint32_t v) {
+static void print_u32(uint32_t v)
+{
 #if DEBUG_PRINTS
     char buf[11];
-    int i = 10;
+    int i;
+
+    i = 10;
     buf[i] = '\0';
-    if (v == 0) { fputc('0', stdout); return; }
-    while (v && i > 0) { buf[--i] = '0' + (v % 10); v /= 10; }
+    if (v == 0u) {
+        fputc('0', stdout);
+        return;
+    }
+    while (v && i > 0) {
+        buf[--i] = (char)('0' + (v % 10u));
+        v /= 10u;
+    }
     print_str(buf + i);
 #else
     (void)v;
 #endif
 }
 
-static void print_fp(int32_t v) {
+static void print_fp(int32_t v)
+{
 #if DEBUG_PRINTS
-    if (v < 0) { fputc('-', stdout); v = -v; }
-    uint32_t whole = (uint32_t)v >> 16;
-    uint32_t frac  = ((uint32_t)v & 0xFFFF) * 1000 / 65536;
+    uint32_t whole;
+    uint32_t frac;
+
+    if (v < 0) {
+        fputc('-', stdout);
+        v = -v;
+    }
+    whole = (uint32_t)v >> 16;
+    frac = ((uint32_t)v & 0xFFFFu) * 1000u / 65536u;
     print_u32(whole);
     fputc('.', stdout);
-    if (frac < 100) fputc('0', stdout);
-    if (frac < 10)  fputc('0', stdout);
+    if (frac < 100u) fputc('0', stdout);
+    if (frac < 10u)  fputc('0', stdout);
     print_u32(frac);
 #else
     (void)v;
 #endif
 }
 
-
-void SysTick_Handler(void) {
+void SysTick_Handler(void)
+{
     g_tick_ms++;
 }
 
-static void systick_init(void) {
-    SysTick->LOAD = (SMCLK_HZ / 1000) - 1;
+static void systick_init(void)
+{
+    SysTick->LOAD = (SMCLK_HZ / 1000u) - 1u;
     SysTick->VAL  = 0;
     SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk
                   | SysTick_CTRL_TICKINT_Msk
                   | SysTick_CTRL_ENABLE_Msk;
 }
 
-static uint32_t get_tick(void) {
+static uint32_t get_tick(void)
+{
     return g_tick_ms;
 }
 
-// latest poses
 static RobotPoseMsg_t g_poses[NUM_ROBOTS];
-
-// AP-local receive time for stale detection
 static uint32_t g_pose_rx_time_ms[NUM_ROBOTS];
+static uint32_t g_pose_fwd_time_ms[NUM_ROBOTS];
 
-// scan for new BOLT msgs// scan for new BOLT msgs
 static void receive_from_bolt(uint32_t now_ms)
 {
-    while (bolt_data_available())
-    {
+    while (bolt_data_available()) {
         uint8_t buf[BOLT_MAX_PAYLOAD];
-        uint8_t len = 0;
+        uint8_t len;
+        bolt_pkt_t *pkt;
 
-        if (!bolt_read(buf, &len))
-        {
+        len = 0;
+        if (!bolt_read(buf, &len)) {
             print_str("BOLT RX read failed\r\n");
             continue;
         }
 
-        if (len != (uint8_t)LEN_BOLT_POSE)
-        {
-            // Ignore non-pose / stale / short BOLT packets.
-            continue;
-        }
+        pkt = (bolt_pkt_t*)buf;
 
-        bolt_pkt_t *pkt = (bolt_pkt_t*)buf;
+        if (len == (uint8_t)LEN_BOLT_POSE && pkt->type == BOLT_POSE) {
+            uint8_t id;
+            uint8_t idx;
+            RobotPoseMsg_t *p;
 
-        if (pkt->type != BOLT_POSE)
-        {
-            print_str("BOLT RX unexpected type=");
-            print_u32(pkt->type);
-            print_str(" expected=");
-            print_u32(BOLT_POSE);
+            id = pkt->pose.robot_id;
+            if (id < 1u || id > (uint8_t)NUM_ROBOTS) {
+                continue;
+            }
+            if (id == OWN_ROBOT_ID) {
+                continue;
+            }
+
+            idx = id - 1u;
+            g_pose_rx_time_ms[idx] = now_ms;
+
+            p = &g_poses[idx];
+            p->robot_id     = id;
+            p->x_fp         = pkt->pose.x_fp;
+            p->y_fp         = pkt->pose.y_fp;
+            p->seq          = pkt->pose.seq;
+            p->t_ns         = pkt->pose.t_ns;
+            p->z_fp         = pkt->pose.z_fp;
+            p->qx_fp        = pkt->pose.qx_fp;
+            p->qy_fp        = pkt->pose.qy_fp;
+            p->qz_fp        = pkt->pose.qz_fp;
+            p->qw_fp        = pkt->pose.qw_fp;
+            p->status       = POSE_STATUS_VALID | POSE_STATUS_INITIALISED;
+
+            print_str("BOLT RX POSE robot=");
+            print_u32(p->robot_id);
+            print_str(" x="); print_fp(p->x_fp);
+            print_str(" y="); print_fp(p->y_fp);
+            print_str(" z="); print_fp(p->z_fp);
             print_str("\r\n");
-            continue;
+
+#if ENABLE_PI_UART_JSON_TX
+            if ((now_ms - g_pose_fwd_time_ms[idx]) >= PEER_FWD_MIN_MS) {
+                g_pose_fwd_time_ms[idx] = now_ms;
+                pi_uart_send_pose(p);
+            }
+#endif
         }
-
-        uint8_t id = pkt->pose.robot_id;
-
-        if (id < 1 || id > NUM_ROBOTS)
-        {
-            print_str("BOLT RX invalid robot_id=");
-            print_u32(id);
-            print_str(" range=1-");
-            print_u32(NUM_ROBOTS);
-            print_str("\r\n");
-            continue;
-        }
-
-        if (id == OWN_ROBOT_ID)
-        {
-            // Normal: ignore own robot pose if it comes back.
-            continue;
-        }
-
-        uint8_t idx = id - 1;
-
-        uint32_t rx_gap_ms = 0;
-        if (g_pose_rx_time_ms[idx] != 0)
-        {
-            rx_gap_ms = now_ms - g_pose_rx_time_ms[idx];
-        }
-
-        // This is the important line for stale detection
-        g_pose_rx_time_ms[idx] = now_ms;
-
-        RobotPoseMsg_t *p = &g_poses[idx];
-
-        p->robot_id     = id;
-        p->x_fp         = pkt->pose.x_fp;
-        p->y_fp         = pkt->pose.y_fp;
-        p->theta_fp     = pkt->pose.theta_fp;
-        p->v_fp         = pkt->pose.v_fp;
-        p->wz_fp        = pkt->pose.wz_fp;
-        p->timestamp_ms = pkt->pose.timestamp_ms;
-        p->status       = POSE_STATUS_VALID | POSE_STATUS_INITIALISED;
-
-        print_str("BOLT RX t=");
-        print_u32(p->timestamp_ms);
-
-        print_str("  robot=");
-        print_u32(p->robot_id);
-
-        print_str("  x=");
-        print_fp(p->x_fp);
-
-        print_str("  y=");
-        print_fp(p->y_fp);
-
-        print_str("  theta=");
-        print_fp(p->theta_fp);
-
-        print_str("  v=");
-        print_fp(p->v_fp);
-
-        print_str("  wz=");
-        print_fp(p->wz_fp);
-
-        print_str("  pkt_age=");
-        print_u32(rx_gap_ms);
-        print_str(" ms");
-                
-        print_str("\r\n");
-
-        #if ENABLE_PI_UART_JSON_TX
-        pi_uart_send_pose(p);
-        #endif
     }
 }
 
-// build and send own pose to CP
-static void send_own_pose(uint32_t now_ms) {
+static void send_own_pose(uint32_t now_ms)
+{
     RobotPoseMsg_t pose;
+    bolt_pkt_t pkt;
+    uint8_t ok;
 
 #if TEST_FIXED_POSE
     get_fixed_pose(&pose, now_ms);
@@ -251,164 +218,145 @@ static void send_own_pose(uint32_t now_ms) {
     }
 #endif
 
+    pose.robot_id = OWN_ROBOT_ID;
+    if (pose.t_ns == 0ull) {
+        pose.t_ns = ((uint64_t)now_ms) * 1000000ull;
+    }
+    pose.status = POSE_STATUS_VALID | POSE_STATUS_INITIALISED;
+    g_poses[OWN_ROBOT_ID - 1u] = pose;
 
-    pose.robot_id     = OWN_ROBOT_ID;
-    pose.timestamp_ms = now_ms;
-    pose.status       = POSE_STATUS_VALID | POSE_STATUS_INITIALISED;
-    g_poses[OWN_ROBOT_ID - 1] = pose;
-
-    bolt_pkt_t pkt;
     memset(&pkt, 0, sizeof(pkt));
+    pkt.type = BOLT_POSE;
+    pkt.pad = 0;
+    pkt.pose.robot_id = OWN_ROBOT_ID;
+    pkt.pose.x_fp = pose.x_fp;
+    pkt.pose.y_fp = pose.y_fp;
+    pkt.pose.z_fp = pose.z_fp;
+    pkt.pose.qx_fp = pose.qx_fp;
+    pkt.pose.qy_fp = pose.qy_fp;
+    pkt.pose.qz_fp = pose.qz_fp;
+    pkt.pose.qw_fp = pose.qw_fp;
+    pkt.pose.t_ns = pose.t_ns;
 
-    pkt.type              = BOLT_POSE;
-    pkt.pad               = 0;
-    pkt.pose.robot_id     = OWN_ROBOT_ID;
-    pkt.pose.x_fp         = pose.x_fp;
-    pkt.pose.y_fp         = pose.y_fp;
-    pkt.pose.theta_fp     = pose.theta_fp;
-    pkt.pose.v_fp         = pose.v_fp;
-    pkt.pose.wz_fp         = pose.wz_fp;
-    pkt.pose.timestamp_ms = now_ms;
+    pkt.pose.seq = pose.seq ? pose.seq : ++g_pose_seq;
+    pkt.pose.cp_tx_round = 0;
 
     print_str("POSE TX t=");
     print_u32(now_ms);
-    print_str("  robot=");
-    print_u32(OWN_ROBOT_ID);
-    print_str("  x=");
-    print_fp(pose.x_fp);
-    print_str("  y=");
-    print_fp(pose.y_fp);
-    print_str("  theta=");
-    print_fp(pose.theta_fp);
-    print_str("  v=");
-    print_fp(pose.v_fp);
-    print_str("  wz=");
-    print_fp(pose.wz_fp);
+    print_str(" robot="); print_u32(OWN_ROBOT_ID);
+    print_str(" x="); print_fp(pose.x_fp);
+    print_str(" y="); print_fp(pose.y_fp);
+    print_str(" z="); print_fp(pose.z_fp);
     print_str("\r\n");
 
-    uint8_t ok = bolt_write((uint8_t*)&pkt, (uint16_t)LEN_BOLT_POSE);
-
+    ok = bolt_write((uint8_t*)&pkt, (uint16_t)LEN_BOLT_POSE);
     if (ok) {
-        print_str("BOLT TX sent ");
-        print_u32(LEN_BOLT_POSE);
-        print_str(" bytes OK\r\n");
+        print_str("BOLT TX POSE OK\r\n");
     } else {
-        print_str("BOLT TX write FAILED\r\n");
+        print_str("BOLT TX POSE FAILED\r\n");
     }
 }
 
-// mark as stale data if no update for a while
 static void update_stale_flags(uint32_t now_ms)
 {
     uint8_t i;
 
-    for (i = 0; i < NUM_ROBOTS; i++)
-    {
-        if (i == OWN_ROBOT_ID - 1)
+    for (i = 0; i < (uint8_t)NUM_ROBOTS; i++) {
+        if (i == OWN_ROBOT_ID - 1u) {
             continue;
-
-        if (!(g_poses[i].status & POSE_STATUS_VALID))
+        }
+        if (!(g_poses[i].status & POSE_STATUS_VALID)) {
             continue;
-
-        if ((now_ms - g_pose_rx_time_ms[i]) > 500u)
-        {
-            if (!(g_poses[i].status & POSE_STATUS_STALE))
-            {
-                g_poses[i].status |= POSE_STATUS_STALE;
-                g_poses[i].status &= ~POSE_STATUS_VALID;
-
-                print_str("[STALE] robot ");
-                print_u32(i + 1);
-                print_str(" marked stale at t=");
-                print_u32(now_ms);
-                print_str("\r\n");
-            }
+        }
+        if ((now_ms - g_pose_rx_time_ms[i]) > STALE_TIMEOUT_MS) {
+            g_poses[i].status |= POSE_STATUS_STALE;
+            g_poses[i].status &= ~POSE_STATUS_VALID;
+            print_str("[STALE] robot ");
+            print_u32(i + 1u);
+            print_str(" marked stale at t=");
+            print_u32(now_ms);
+            print_str("\r\n");
         }
     }
 }
 
-int main(void) {
+int main(void)
+{
+    uint8_t b;
+    uint32_t last_control_ms;
+
+
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;
 
-    CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_12); 
+    CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_12);
     CS_initClockSignal(CS_SMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
 
     pi_uart_init(OWN_ROBOT_ID);
-    
-    #if DUMMY_JSON_TEST
+
+#if DUMMY_JSON_TEST
     pi_uart_test_dummy_json();
-
-    #if DEBUG_PRINTS
-    RobotPoseMsg_t test_pose;
-    if (pi_uart_get_pose(&test_pose)) {
-        print_str("DUMMY JSON PARSED x=");
-        print_fp(test_pose.x_fp);
-        print_str(" y=");
-        print_fp(test_pose.y_fp);
-        print_str(" yaw=");
-        print_fp(test_pose.theta_fp);
-        print_str(" vx=");
-        print_fp(test_pose.v_fp);
-        print_str(" wz=");
-        print_fp(test_pose.wz_fp);
-        print_str("\r\n");
-
-        // Put it back so send_own_pose() can still use it later
-        pi_uart_test_dummy_json();
+#if DEBUG_PRINTS
+    {
+        RobotPoseMsg_t test_pose;
+        if (pi_uart_get_pose(&test_pose)) {
+            print_str("DUMMY JSON PARSED x="); print_fp(test_pose.x_fp);
+            print_str(" y="); print_fp(test_pose.y_fp);
+            print_str(" z="); print_fp(test_pose.z_fp);
+            print_str("\r\n");
+            pi_uart_test_dummy_json();
+        } else {
+            print_str("DUMMY JSON FAILED\r\n");
+        }
     }
-    else {
-        print_str("DUMMY JSON FAILED\r\n");
-    }
-    #endif
+#endif
+#endif
 
-    #endif
-
-    #if DEBUG_PRINTS
+#if DEBUG_PRINTS
     printf("\r\n*** AP JSON POSE BOOT ***\r\n");
     printf("OWN_ROBOT_ID=%u\r\n", OWN_ROBOT_ID);
     printf("TEST_FIXED_POSE=%u\r\n", TEST_FIXED_POSE);
-    #endif
+#endif
 
     systick_init();
 
-    #if DEBUG_PRINTS
+#if DEBUG_PRINTS
     printf("before bolt_init\r\n");
-    #endif
+#endif
 
-    uint8_t b = bolt_init();
+    b = bolt_init();
+    (void)b;
 
-    #if DEBUG_PRINTS
+#if DEBUG_PRINTS
     printf("after bolt_init = %u\r\n", b);
-    #endif
+#endif
 
     __enable_irq();
 
-    #if DEBUG_PRINTS
+#if DEBUG_PRINTS
     printf("enter loop\r\n");
-    #endif
+#endif
 
-    uint32_t last_control_ms = 0u;
+    memset(g_poses, 0, sizeof(g_poses));
+    memset(g_pose_rx_time_ms, 0, sizeof(g_pose_rx_time_ms));
+    memset(g_pose_fwd_time_ms, 0, sizeof(g_pose_fwd_time_ms));
+
+    last_control_ms = 0u;
 
     while (1) {
-        uint32_t now = get_tick();
-        
+        uint32_t now;
+
+        now = get_tick();
         pi_uart_poll(now);
         receive_from_bolt(now);
 
-        
         if ((now - last_control_ms) >= CONTROL_PERIOD_MS) {
             last_control_ms = now;
+
+#if DUMMY_JSON_TEST
+            pi_uart_test_dummy_json();
+#endif
             send_own_pose(now);
             update_stale_flags(now);
         }
-        
-        /* every X ms (20 Hz) send pose and correction
-        if ((now - last_control_ms) >= CONTROL_PERIOD_MS) {
-            last_control_ms = now;
-            update_stale_flags(now);
-            send_own_pose(now);
-            send_correction(now);
-        }
-        */
     }
 }

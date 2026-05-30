@@ -17,6 +17,9 @@ src/bolt.obj: /home/clzhou/ti/ccs2050/ccs/ccs_base/arm/include/CMSIS/cmsis_compi
 src/bolt.obj: /home/clzhou/ti/ccs2050/ccs/ccs_base/arm/include/CMSIS/cmsis_ccs.h
 src/bolt.obj: /home/clzhou/ti/ccs2050/ccs/ccs_base/arm/include/system_msp432p401r.h
 src/bolt.obj: /home/clzhou/workspace_v9/Mixer_com_AP/include/bolt.h
+src/bolt.obj: /home/clzhou/ti/ARMthing/include/stddef.h
+src/bolt.obj: /home/clzhou/ti/ARMthing/include/_ti_config.h
+src/bolt.obj: /home/clzhou/ti/ARMthing/include/linkage.h
 src/bolt.obj: /home/clzhou/workspace_v9/Mixer_com_AP/include/message.h
 src/bolt.obj: /home/clzhou/workspace_v9/Mixer_com_AP/include/board_config.h
 src/bolt.obj: /home/clzhou/workspace_v9/Mixer_com_AP/include/driverlib/MSP432P4xx/gpio.h
@@ -58,6 +61,12 @@ src/bolt.obj: /home/clzhou/workspace_v9/Mixer_com_AP/include/driverlib/MSP432P4x
 /home/clzhou/ti/ccs2050/ccs/ccs_base/arm/include/system_msp432p401r.h:
 
 /home/clzhou/workspace_v9/Mixer_com_AP/include/bolt.h:
+
+/home/clzhou/ti/ARMthing/include/stddef.h:
+
+/home/clzhou/ti/ARMthing/include/_ti_config.h:
+
+/home/clzhou/ti/ARMthing/include/linkage.h:
 
 /home/clzhou/workspace_v9/Mixer_com_AP/include/message.h:
 
