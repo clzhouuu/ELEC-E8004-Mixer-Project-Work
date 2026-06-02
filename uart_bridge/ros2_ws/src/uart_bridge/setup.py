@@ -1,0 +1,34 @@
+from setuptools import find_packages, setup
+
+package_name = "uart_bridge"
+
+setup(
+    name=package_name,
+    version="0.0.0",
+    packages=find_packages(exclude=["test"]),
+    data_files=[
+        ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
+        ("share/" + package_name, ["package.xml"]),
+    ],
+    install_requires=["setuptools"],
+    zip_safe=True,
+    maintainer="paz",
+    maintainer_email="paz@todo.todo",
+    description="TODO: Package description",
+    license="TODO: License declaration",
+    extras_require={
+        "test": [
+            "pytest",
+        ],
+    },
+    entry_points={
+        "console_scripts": [
+            "uart_node = uart_bridge.uart_node:main",
+            "odom_uart = uart_bridge.odom_uart:main",
+            "pose_uart = uart_bridge.pose_uart:main",
+            "latency_pdr_node = uart_bridge.latency_pdr_node:main",
+            "amcl_pose_generator = uart_bridge.amcl_pose_generator:main",
+            "metrics_sliding = uart_bridge.metrics_sliding:main",
+        ],
+    },
+)
